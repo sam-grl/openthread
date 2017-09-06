@@ -652,27 +652,19 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
 
     memset(&sockaddr, 0, sizeof(sockaddr));
     sockaddr.sin_family = AF_INET;
-    inet_pton(AF_INET, "127.0.0.1", &sockaddr.sin_addr);
+    inet_pton(AF_INET, "224.0.0.142", &sockaddr.sin_addr); // send all output to multicast group (to Python script)
 
-    for (i = 1; i <= WELLKNOWN_NODE_ID; i++)
-    {
-        ssize_t rval;
+	ssize_t rval;
 
-        if (NODE_ID == i)
-        {
-            continue;
-        }
+	sockaddr.sin_port = htons(9000 + WELLKNOWN_NODE_ID);
+	rval = sendto(sSockFd, (const char *)aMessage, 1 + aFrame->mLength,
+				  0, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
 
-        sockaddr.sin_port = htons(9000 + sPortOffset + i);
-        rval = sendto(sSockFd, (const char *)aMessage, 1 + aFrame->mLength,
-                      0, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
-
-        if (rval < 0)
-        {
-            perror("recvfrom");
-            exit(EXIT_FAILURE);
-        }
-    }
+	if (rval < 0)
+	{
+		perror("recvfrom");
+		exit(EXIT_FAILURE);
+	}
 }
 
 void radioSendAck(void)
