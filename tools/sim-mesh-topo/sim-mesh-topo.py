@@ -27,15 +27,15 @@ print 'sim-mesh-topo.py - server started on address \'%s\' UDP port %s' % server
 time0 = time.time()
 
 while True:
-    data, address = sock.recvfrom(4096)
-    source_node = address[1] - PORTS_OFFSET    
-    t = round(time.time()-time0,3); # show rel time in sec.
+	data, address = sock.recvfrom(4096)
+	source_node = address[1] - PORTS_OFFSET    
+	t = round(time.time()-time0,3); # show rel time in sec.
 	
-    print '%10.3f  rcv frame %3i bytes from node %2i' % (t, len(data), source_node)
+	print '%10.3f  rcv frame %3i bytes from node %2i' % (t, len(data), source_node)
 	#print data
 
 	# send data to other simulated nodes
-    if data:
+	if data:
 		# Fully connected mesh case
 		dest_nodes = range(1,WELLKNOWN_NODE_ID)
 		
@@ -45,4 +45,3 @@ while True:
 				continue
 			dest_address = ('localhost', PORTS_OFFSET + n )
 			sent = sockd.sendto(data, dest_address)
-		
