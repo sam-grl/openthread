@@ -1,6 +1,7 @@
 import socket
 import sys
 import struct
+import time
 
 MCAST_GRP = '224.0.0.142'
 WELLKNOWN_NODE_ID = 34
@@ -15,22 +16,25 @@ sockd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
 # Bind the receiving socket to the port
 server_address = ('', RCV_UDP_PORT)
-print >>sys.stderr, 'starting up on %s port %s' % server_address
 sock.bind(server_address)
+
 # Register to multicast group as listener
 mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
 sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+print 'sim-mesh-topo.py - server started on address \'%s\' UDP port %s' % server_address
+
+# time printing
+time0 = time.time()
 
 while True:
-    #print >>sys.stderr, '\nwaiting to receive message'
     data, address = sock.recvfrom(4096)
-    
-    print >>sys.stderr, 'rcv %s bytes from %s' % (len(data), address)
-    print >>sys.stderr, data
-    
-    source_node = address[1] - PORTS_OFFSET
-    #print >>sys.stderr, 'source node identified: %i' % (source_node)
+    source_node = address[1] - PORTS_OFFSET    
+    t = round(time.time()-time0,3); # show rel time in sec.
+	
+    print '%10.3f  rcv frame %3i bytes from node %2i' % (t, len(data), source_node)
+	#print data
 
+	# send data to other simulated nodes
     if data:
 		# Fully connected mesh case
 		dest_nodes = range(1,WELLKNOWN_NODE_ID)
