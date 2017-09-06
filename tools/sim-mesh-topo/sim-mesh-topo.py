@@ -4,7 +4,8 @@ import struct
 
 MCAST_GRP = '224.0.0.142'
 WELLKNOWN_NODE_ID = 34
-RCV_UDP_PORT = 9000 + WELLKNOWN_NODE_ID
+PORTS_OFFSET = 9000
+RCV_UDP_PORT = PORTS_OFFSET + WELLKNOWN_NODE_ID
 
 # Create a UDP socket for receiving (multicast)
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -27,7 +28,7 @@ while True:
     print >>sys.stderr, 'rcv %s bytes from %s' % (len(data), address)
     print >>sys.stderr, data
     
-    source_node = address[1] - 9000
+    source_node = address[1] - PORTS_OFFSET
     #print >>sys.stderr, 'source node identified: %i' % (source_node)
 
     if data:
@@ -35,7 +36,9 @@ while True:
 		dest_nodes = range(1,WELLKNOWN_NODE_ID)
 		
 		# Send radio frame to all destinations that need to receive it
-		for i in dest_nodes:
-			dest_address = ('localhost', 9000 + i )
+		for n in dest_nodes:
+			if n == source_node:
+				continue
+			dest_address = ('localhost', PORTS_OFFSET + n )
 			sent = sockd.sendto(data, dest_address)
 		
