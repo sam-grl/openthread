@@ -144,7 +144,7 @@ Mac::Mac(ThreadNetif &aThreadNetif):
     mBackoffTimer(aThreadNetif.GetInstance(), &Mac::HandleBeginTransmit, this),
     mReceiveTimer(aThreadNetif.GetInstance(), &Mac::HandleReceiveTimer, this),
     mShortAddress(kShortAddrInvalid),
-    mPanId(kPanIdBroadcast),
+    mPanId(0x1234),
     mChannel(OPENTHREAD_CONFIG_DEFAULT_CHANNEL),
     mMaxTransmitPower(OPENTHREAD_CONFIG_DEFAULT_MAX_TRANSMIT_POWER),
     mSendHead(NULL),

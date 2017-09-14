@@ -112,7 +112,8 @@ void otInstancePostConstructor(otInstance *aInstance)
 #if OPENTHREAD_CONFIG_ENABLE_AUTO_START_SUPPORT
 
     // If auto start is configured, do that now
-    if (otThreadGetAutoStart(aInstance))
+	otThreadSetAutoStart(aInstance,true) ;
+    if ( otThreadGetAutoStart(aInstance) )
     {
         if (otIp6SetEnabled(aInstance, true) == OT_ERROR_NONE)
         {

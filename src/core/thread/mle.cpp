@@ -64,7 +64,7 @@ namespace Mle {
 Mle::Mle(ThreadNetif &aThreadNetif) :
     ThreadNetifLocator(aThreadNetif),
     mRetrieveNewNetworkData(false),
-    mRole(OT_DEVICE_ROLE_DISABLED),
+    mRole(OT_DEVICE_ROLE_DETACHED),
     mDeviceMode(ModeTlv::kModeRxOnWhenIdle | ModeTlv::kModeSecureDataRequest),
     mParentRequestState(kParentIdle),
     mReattachState(kReattachStop),
@@ -89,7 +89,7 @@ Mle::Mle(ThreadNetif &aThreadNetif) :
     mEnableEui64Filtering(false),
     mAnnounceChannel(OT_RADIO_CHANNEL_MIN),
     mPreviousChannel(0),
-    mPreviousPanId(Mac::kPanIdBroadcast)
+    mPreviousPanId(0x1234)
 {
     uint8_t meshLocalPrefix[8];
 

@@ -51,7 +51,7 @@
 #include <openthread/platform/alarm-milli.h>
 
 uint32_t NODE_ID = 1;
-uint32_t WELLKNOWN_NODE_ID = 34;
+uint32_t WELLKNOWN_NODE_ID = 634;
 
 #ifndef _WIN32
 int     gArgumentsCount = 0;

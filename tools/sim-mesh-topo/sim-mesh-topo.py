@@ -4,7 +4,8 @@ import struct
 import time
 
 MCAST_GRP = '224.0.0.142'
-WELLKNOWN_NODE_ID = 34
+WELLKNOWN_NODE_ID = 634
+MAX_NODE_ID = 12		# max network size
 PORTS_OFFSET = 9000
 RCV_UDP_PORT = PORTS_OFFSET + WELLKNOWN_NODE_ID
 
@@ -37,7 +38,7 @@ while True:
 	# send data to other simulated nodes
 	if data:
 		# Fully connected mesh case
-		dest_nodes = range(1,WELLKNOWN_NODE_ID)
+		dest_nodes = range(1,MAX_NODE_ID+1)
 		
 		# Send radio frame to all destinations that need to receive it
 		for n in dest_nodes:

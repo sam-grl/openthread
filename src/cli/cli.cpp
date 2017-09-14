@@ -284,6 +284,8 @@ Interpreter::Interpreter(otInstance *aInstance):
     memset(mResolvingHostname, 0, sizeof(mResolvingHostname));
 #endif // OPENTHREAD_ENABLE_DNS_CLIENT
 
+	otThreadSetAutoStart(mInstance, true);
+
 #endif
 }
 
