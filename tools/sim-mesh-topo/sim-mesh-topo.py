@@ -36,10 +36,15 @@ def matrixLineTopo(src):
 		dst = [src-1,src+1]
 	return dst
 
-# Matrix/Topology selection - put in the function ref here and restart script.
-MATRIX = matrixLineTopo
-
 def main():
+
+	# Matrix/Topology selection 
+	MATRIX = matrixLineTopo
+
+	# check argin
+	if len(sys.argv) > 1:
+		MATRIX = eval(sys.argv[1])
+		
 	# Create a UDP socket for receiving (multicast)
 	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
@@ -54,6 +59,7 @@ def main():
 	mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
 	sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
 	print 'sim-mesh-topo.py - server started on address \'%s\' UDP port %s' % server_address
+	print '   selected network topology function: %s (%s)' % ( MATRIX.__name__ , MATRIX.__doc__ )
 
 	# time printing
 	time0 = time.time()
@@ -77,5 +83,6 @@ def main():
 				sent = sockd.sendto(data, dest_address)
 				print "%i" % n,
 		print "}"
+
 #-------Script entry point--------
 main()
