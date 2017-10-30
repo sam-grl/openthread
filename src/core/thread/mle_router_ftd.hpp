@@ -31,8 +31,10 @@
  *   This file includes definitions for MLE functionality required by the Thread Router and Leader roles.
  */
 
-#ifndef MLE_ROUTER_HPP_
-#define MLE_ROUTER_HPP_
+#ifndef MLE_ROUTER_FTD_HPP_
+#define MLE_ROUTER_FTD_HPP_
+
+#include "openthread-core-config.h"
 
 #include "utils/wrap_string.h"
 
@@ -77,10 +79,10 @@ public:
     /**
      * This constructor initializes the object.
      *
-     * @param[in]  aThreadNetif  A reference to the Thread network interface.
+     * @param[in]  aInstance     A reference to the OpenThread instance.
      *
      */
-    explicit MleRouter(ThreadNetif &aThreadNetif);
+    explicit MleRouter(otInstance &aInstance);
 
     /**
      * This method indicates whether or not the Router Role is enabled.
@@ -140,6 +142,14 @@ public:
      *
      */
     uint8_t GetActiveRouterCount(void) const;
+
+    /**
+      * This method returns the number of active neighbor routers.
+      *
+      * @returns The number of active neighbor routers.
+      *
+      */
+    uint8_t GetActiveNeighborRouterCount(void) const;
 
     /**
      * This method returns the time in seconds since the last Router ID Sequence update.
@@ -662,7 +672,7 @@ public:
      * @retval OT_ERROR_NONE  Steering data was set
      *
      */
-    otError SetSteeringData(otExtAddress *aExtAddress);
+    otError SetSteeringData(const otExtAddress *aExtAddress);
 #endif // OPENTHREAD_CONFIG_ENABLE_STEERING_DATA_SET_OOB
 
     /**
@@ -742,8 +752,8 @@ private:
     otError SendLinkAccept(const Ip6::MessageInfo &aMessageInfo, Neighbor *aNeighbor,
                            const TlvRequestTlv &aTlvRequest, const ChallengeTlv &aChallenge);
     otError SendParentResponse(Child *aChild, const ChallengeTlv &aChallenge, bool aRoutersOnlyRequest);
-    otError SendChildIdResponse(Child *aChild);
-    otError SendChildUpdateRequest(Child *aChild);
+    otError SendChildIdResponse(Child &aChild);
+    otError SendChildUpdateRequest(Child &aChild);
     otError SendChildUpdateResponse(Child *aChild, const Ip6::MessageInfo &aMessageInfo,
                                     const uint8_t *aTlvs, uint8_t aTlvsLength,  const ChallengeTlv *challenge);
     otError SendDataResponse(const Ip6::Address &aDestination, const uint8_t *aTlvs, uint8_t aTlvsLength,
@@ -774,7 +784,7 @@ private:
     Child *FindChild(uint16_t aChildId);
     Child *FindChild(const Mac::ExtAddress &aMacAddr);
 
-    void SetChildStateToValid(Child *aChild);
+    void SetChildStateToValid(Child &aChild);
     bool HasChildren(void);
     void RemoveChildren(void);
     bool HasMinDowngradeNeighborRouters(void);
@@ -813,8 +823,9 @@ private:
     uint8_t mRouterDowngradeThreshold;
     uint8_t mLeaderWeight;
     uint32_t mFixedLeaderPartitionId;  ///< only for certification testing
-    bool mRouterRoleEnabled;
-    bool mIsRouterRestoringChildren;
+    bool mRouterRoleEnabled : 1;
+    bool mIsRouterRestoringChildren : 1;
+    bool mAddressSolicitPending : 1;
 
     uint8_t mRouterId;
     uint8_t mPreviousRouterId;
@@ -839,4 +850,4 @@ private:
 
 }  // namespace ot
 
-#endif  // MLE_ROUTER_HPP_
+#endif  // MLE_ROUTER_FTD_HPP_

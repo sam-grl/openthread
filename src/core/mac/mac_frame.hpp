@@ -34,6 +34,8 @@
 #ifndef MAC_FRAME_HPP_
 #define MAC_FRAME_HPP_
 
+#include "openthread-core-config.h"
+
 #include <limits.h>
 #include "utils/wrap_stdint.h"
 #include "utils/wrap_string.h"
@@ -41,7 +43,6 @@
 #include <openthread/types.h>
 #include <openthread/platform/radio.h>
 
-#include "openthread-core-config.h"
 #include "common/encoding.hpp"
 
 namespace ot {
@@ -173,7 +174,6 @@ struct Address
  * This class implements IEEE 802.15.4 MAC frame generation and parsing.
  *
  */
-OT_TOOL_PACKED_BEGIN
 class Frame: public otRadioFrame
 {
 public:
@@ -826,7 +826,7 @@ private:
 
     static uint8_t GetKeySourceLength(uint8_t aKeyIdMode);
 
-} OT_TOOL_PACKED_END;
+};
 
 OT_TOOL_PACKED_BEGIN
 class Beacon

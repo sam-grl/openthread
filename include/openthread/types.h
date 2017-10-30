@@ -35,8 +35,6 @@
 #ifndef OPENTHREAD_TYPES_H_
 #define OPENTHREAD_TYPES_H_
 
-#include <openthread/config.h>
-
 #include <stdint.h>
 #include <stdbool.h>
 #ifdef OTDLL
@@ -69,6 +67,16 @@ extern "C" {
     ((type *)((uint8_t*)(address) - myoffsetof(type, field)))
 #endif /* CONTAINING_RECORD */
 #endif /* _WIN32 */
+
+/**
+ * @addtogroup api-types
+ *
+ * @brief
+ *   This module includes API types
+ *
+ * @{
+ *
+ */
 
 /**
  * This type represents the OpenThread instance structure.
@@ -205,9 +213,9 @@ typedef enum otError
     OT_ERROR_INVALID_SOURCE_ADDRESS = 20,
 
     /**
-     * Received a frame filtered by the whitelist.
+     * Received a frame filtered by the address filter (whitelisted or blacklisted).
      */
-    OT_ERROR_WHITELIST_FILTERED = 21,
+    OT_ERROR_ADDRESS_FILTERED = 21,
 
     /**
      * Received a frame filtered by the destination address check.
@@ -223,11 +231,6 @@ typedef enum otError
      * The operation is already in progress.
      */
     OT_ERROR_ALREADY = 24,
-
-    /**
-     * Received a frame filtered by the blacklist.
-     */
-    OT_ERROR_BLACKLIST_FILTERED = 25,
 
     /**
      * The creation of IPv6 address failed.
@@ -280,11 +283,9 @@ typedef enum otError
 #define OT_MASTER_KEY_SIZE         16  ///< Size of the Thread Master Key (bytes)
 
 /**
- * Concatenated List of Type Identifiers of Other Diagnostics TLVs Used to Request or Reset Multiple Diagnostic Values.
+ * Maximum Number of Network Diagnostic TLV Types to Request or Reset.
  */
-#define OT_NETWORK_DIAGNOSTIC_TYPELIST_TYPE          18
-
-#define OT_NETWORK_DIAGNOSTIC_TYPELIST_MAX_ENTRIES   19  ///< Maximum Number of Other Network Diagnostic TLV Types
+#define OT_NETWORK_DIAGNOSTIC_TYPELIST_MAX_ENTRIES   19
 
 /**
  * @struct otMasterKey
@@ -415,7 +416,7 @@ typedef struct otExtAddress
 OT_TOOL_PACKED_BEGIN
 struct otIp6Address
 {
-    union
+    union OT_TOOL_PACKED_FIELD
     {
         uint8_t  m8[OT_IP6_ADDRESS_SIZE];                      ///< 8-bit fields
         uint16_t m16[OT_IP6_ADDRESS_SIZE / sizeof(uint16_t)];  ///< 16-bit fields
@@ -650,7 +651,7 @@ typedef struct otLinkModeConfig
     bool mRxOnWhenIdle : 1;
 
     /**
-     * 1, if the sender will use IEEE 802.15.4 to secure all data requests.  0, otherwise.
+     * 1, if the sender uses IEEE 802.15.4 to secure all data requests.  0, otherwise.
      */
     bool mSecureDataRequests : 1;
 
@@ -692,15 +693,21 @@ enum
 /**
  * This structure represents an IPv6 prefix.
  */
-typedef struct otIp6Prefix
+OT_TOOL_PACKED_BEGIN
+struct otIp6Prefix
 {
     otIp6Address  mPrefix;  ///< The IPv6 prefix.
     uint8_t       mLength;  ///< The IPv6 prefix length.
-} otIp6Prefix;
+} OT_TOOL_PACKED_END;
 
-#define OT_NETWORK_DATA_ITERATOR_INIT  0  ///< Initializer for otNetworkDataIterator.
+/**
+ * This type represents an IPv6 prefix.
+ */
+typedef struct otIp6Prefix otIp6Prefix;
 
-typedef uint16_t otNetworkDataIterator;  ///< Used to iterate through Network Data information.
+#define OT_NETWORK_DATA_ITERATOR_INIT  0    ///< Initializer for otNetworkDataIterator.
+
+typedef uint32_t otNetworkDataIterator;     ///< Used to iterate through Network Data information.
 
 /**
  * This structure represents a Border Router configuration.
@@ -771,7 +778,7 @@ typedef struct otExternalRouteConfig
     /**
      * The Rloc associated with the external route entry.
      *
-     * This value is ignored when adding an external route. For any added route the device's Rloc will be used.
+     * This value is ignored when adding an external route. For any added route, the device's Rloc is used.
      */
     uint16_t mRloc16;
 
@@ -804,6 +811,68 @@ typedef enum otRoutePreference
     OT_ROUTE_PREFERENCE_MED  = 0,   ///< Medium route preference.
     OT_ROUTE_PREFERENCE_HIGH = 1,   ///< High route preference.
 } otRoutePreference;
+
+enum
+{
+    /**
+     * Maximum size of Service Data in bytes.
+     */
+    kMaxServiceDataSize = 252,
+
+    /**
+     * Maximum size of Server Data in bytes. This is theoretical limit, practical one is much lower.
+     */
+    kMaxServerDataSize = 248,
+};
+
+/**
+ * This structure represents a Server configuration.
+ */
+typedef struct otServerConfig
+{
+    /**
+     * TRUE, if this configuration is considered Stable Network Data.  FALSE, otherwise.
+     */
+    bool mStable : 1;
+
+    /**
+     * Length of server data.
+     */
+    uint8_t mServerDataLength;
+
+    /**
+     * Server data bytes
+     */
+    uint8_t mServerData[kMaxServerDataSize];
+
+    /**
+     * The Server Rloc.
+     */
+    uint16_t mRloc16;
+} otServerConfig;
+
+/**
+ * This structure represents a Service configuration.
+ */
+typedef struct otServiceConfig
+{
+    /**
+     * IANA Enterprise Number.
+     */
+    uint32_t mEnterpriseNumber;
+
+    /**
+     * Length of service data.
+     */
+    uint8_t mServiceDataLength;
+
+    /**
+     * Service data bytes
+     */
+    uint8_t mServiceData[kMaxServiceDataSize];
+
+    otServerConfig mServerConfig;
+} otServiceConfig;
 
 /**
  * Used to indicate no fixed received signal strength was set
@@ -964,7 +1033,7 @@ typedef struct otMacCounters
     uint32_t mRxBeacon;               ///< The number of received beacon.
     uint32_t mRxBeaconRequest;        ///< The number of received beacon request.
     uint32_t mRxOther;                ///< The number of received other types of frames.
-    uint32_t mRxWhitelistFiltered;    ///< The number of received packets filtered by whitelist.
+    uint32_t mRxAddressFiltered;      ///< The number of received packets filtered by address filter (whitelist or blacklist).
     uint32_t mRxDestAddrFiltered;     ///< The number of received packets filtered by destination check.
     uint32_t mRxDuplicated;           ///< The number of received duplicated packets.
     uint32_t mRxErrNoFrame;           ///< The number of received packets that do not contain contents.
@@ -1009,6 +1078,8 @@ typedef struct otBufferInfo
     uint16_t mCoapBuffers;            ///< The number of buffers in the CoAP send queue.
     uint16_t mCoapSecureMessages;     ///< The number of messages in the CoAP secure send queue.
     uint16_t mCoapSecureBuffers;      ///< The number of buffers in the CoAP secure send queue.
+    uint16_t mApplicationCoapMessages;///< The number of messages in the application CoAP send queue.
+    uint16_t mApplicationCoapBuffers; ///< The number of buffers in the application CoAP send queue.
 } otBufferInfo;
 
 /**
@@ -1103,9 +1174,8 @@ typedef void (OTCALL *otDeviceAvailabilityChangedCallback)(bool aAdded, const GU
 /**
  * Log levels.
  *
- * Implimentation note: Log Levels are defines so that embedded
- * implimentations can elimiate code at compile time via if/else/endif
- * See openthread/platform/logging.h for details.
+ * Implementation note: Log Levels are defines so that embedded implementations can eliminate code at compile time via
+ * #if/#else/#endif. See `openthread/platform/logging.h` for details.
  *
  * @sa OT_LOG_LEVEL_NONE and related macros.
  */
@@ -1130,9 +1200,13 @@ typedef enum otLogRegion
     OT_LOG_REGION_NET_DIAG = 11, ///< Network Diagnostic
     OT_LOG_REGION_PLATFORM = 12, ///< Platform
     OT_LOG_REGION_COAP     = 13, ///< CoAP
-    OT_LOG_REGION_CLI      = 14, ///< Cli
+    OT_LOG_REGION_CLI      = 14, ///< CLI
 } otLogRegion;
 
+/**
+ * @}
+ *
+ */
 
 #ifdef __cplusplus
 }  // extern "C"

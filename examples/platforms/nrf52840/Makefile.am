@@ -37,6 +37,7 @@ lib_LIBRARIES                                                                   
 COMMONCPPFLAGS                                                                                             = \
     -DCONFIG_GPIO_AS_PINRESET                                                                                \
     -DNRF52840_XXAA                                                                                          \
+    -DENABLE_FEM=1                                                                                           \
     -I$(top_srcdir)/include                                                                                  \
     -I$(top_srcdir)/examples/platforms                                                                       \
     -I$(top_srcdir)/src/core                                                                                 \
@@ -44,25 +45,38 @@ COMMONCPPFLAGS                                                                  
     -I$(top_srcdir)/third_party/NordicSemiconductor                                                          \
     -I$(top_srcdir)/third_party/NordicSemiconductor/cmsis                                                    \
     -I$(top_srcdir)/third_party/NordicSemiconductor/device                                                   \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/dependencies                                             \
     -I$(top_srcdir)/third_party/NordicSemiconductor/drivers/clock                                            \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/drivers/common                                           \
     -I$(top_srcdir)/third_party/NordicSemiconductor/drivers/radio                                            \
     -I$(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/raal                                       \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/drivers/power                                            \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/drivers/systick                                          \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/drivers/usbd                                             \
     -I$(top_srcdir)/third_party/NordicSemiconductor/hal                                                      \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/libraries/atfifo                                         \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/libraries/usb                                            \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/libraries/usb/config                                     \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/libraries/usb/class/cdc                                  \
+    -I$(top_srcdir)/third_party/NordicSemiconductor/libraries/usb/class/cdc/acm                              \
     -I$(top_srcdir)/third_party/NordicSemiconductor/segger_rtt                                               \
     $(NULL)
 
 PLATFORM_COMMON_SOURCES                                                                                    = \
     alarm.c                                                                                                  \
+    fem.c                                                                                                    \
     flash.c                                                                                                  \
     logging.c                                                                                                \
     misc.c                                                                                                   \
     platform.c                                                                                               \
-    uart.c                                                                                                   \
     platform-config.h                                                                                        \
+    platform-fem.h                                                                                           \
     platform-nrf5.h                                                                                          \
     radio.c                                                                                                  \
     random.c                                                                                                 \
     temp.c                                                                                                   \
+    uart.c                                                                                                   \
+    usb-cdc-uart.c                                                                                           \
     $(NULL)
 
 SINGLEPHY_SOURCES                                                                                          = \
@@ -70,6 +84,7 @@ SINGLEPHY_SOURCES                                                               
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_notification_direct.c   \
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_priority_drop_direct.c  \
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_request_direct.c        \
+    @top_builddir@/third_party/NordicSemiconductor/drivers/radio/fem/nrf_fem_control_direct.c                \
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/raal/single_phy/single_phy.c                \
     $(NULL)
 
@@ -85,6 +100,7 @@ SOFTDEVICE_SOURCES                                                              
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_priority_drop_swi.c     \
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_request_swi.c           \
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_swi.c                   \
+    @top_builddir@/third_party/NordicSemiconductor/drivers/radio/fem/nrf_fem_control_softdevice.c            \
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/raal/softdevice/nrf_raal_softdevice.c       \
     $(NULL)
 
@@ -120,6 +136,7 @@ NORDICSEMI_SOURCES                                                              
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_fsm.c                   \
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_pib.c                   \
     @top_builddir@/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_rx_buffer.c             \
+    @top_builddir@/third_party/NordicSemiconductor/drivers/radio/fem/nrf_fem_control_common.c                \
     @top_builddir@/third_party/NordicSemiconductor/segger_rtt/SEGGER_RTT.c                                   \
     @top_builddir@/third_party/NordicSemiconductor/segger_rtt/SEGGER_RTT_Conf.h                              \
     @top_builddir@/third_party/NordicSemiconductor/device/gcc_startup_nrf52840.S                             \
@@ -134,7 +151,17 @@ libopenthread_nrf52840_a_SOURCES                                                
     $(PLATFORM_SOURCES)                                                                                      \
     $(NORDICSEMI_SOURCES)                                                                                    \
     $(SINGLEPHY_SOURCES)                                                                                     \
+    @top_builddir@/third_party/NordicSemiconductor/dependencies/app_util_platform.c                          \
+    @top_builddir@/third_party/NordicSemiconductor/drivers/common/nrf_drv_common.c                           \
     @top_builddir@/third_party/NordicSemiconductor/drivers/clock/nrf_drv_clock.c                             \
+    @top_builddir@/third_party/NordicSemiconductor/drivers/power/nrf_drv_power.c                             \
+    @top_builddir@/third_party/NordicSemiconductor/drivers/systick/nrf_drv_systick.c                         \
+    @top_builddir@/third_party/NordicSemiconductor/drivers/usbd/nrf_drv_usbd.c                               \
+    @top_builddir@/third_party/NordicSemiconductor/libraries/atfifo/nrf_atfifo.c                             \
+    @top_builddir@/third_party/NordicSemiconductor/libraries/usb/app_usbd.c                                  \
+    @top_builddir@/third_party/NordicSemiconductor/libraries/usb/app_usbd_core.c                             \
+    @top_builddir@/third_party/NordicSemiconductor/libraries/usb/app_usbd_string_desc.c                      \
+    @top_builddir@/third_party/NordicSemiconductor/libraries/usb/class/cdc/acm/app_usbd_cdc_acm.c            \
     $(NULL)
 
 libopenthread_nrf52840_sdk_a_CPPFLAGS                                                                      = \
@@ -190,6 +217,9 @@ noinst_HEADERS                                                                  
     $(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_procedures_duration.h    \
     $(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_request.h                \
     $(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/nrf_drv_radio802154_rx_buffer.h              \
+    $(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/fem/nrf_fem_control_api.h                    \
+    $(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/fem/nrf_fem_control_config.h                 \
+    $(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/fem/nrf_fem_control_internal.h               \
     $(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/raal/nrf_raal_api.h                          \
     $(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/raal/nrf_raal_config.h                       \
     $(top_srcdir)/third_party/NordicSemiconductor/drivers/radio/raal/softdevice/nrf_raal_softdevice.h        \

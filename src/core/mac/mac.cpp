@@ -33,8 +33,6 @@
 
 #define WPP_NAME "mac.tmh"
 
-#include <openthread/config.h>
-
 #include "mac.hpp"
 
 #include "utils/wrap_string.h"
@@ -138,19 +136,8 @@ void Mac::StartCsmaBackoff(void)
     }
 }
 
-Mac::Mac(ThreadNetif &aThreadNetif):
-    ThreadNetifLocator(aThreadNetif),
-    mMacTimer(aThreadNetif.GetInstance(), &Mac::HandleMacTimer, this),
-    mBackoffTimer(aThreadNetif.GetInstance(), &Mac::HandleBeginTransmit, this),
-    mReceiveTimer(aThreadNetif.GetInstance(), &Mac::HandleReceiveTimer, this),
-    mShortAddress(kShortAddrInvalid),
-    mPanId(0x1234),
-    mChannel(OPENTHREAD_CONFIG_DEFAULT_CHANNEL),
-    mMaxTransmitPower(OPENTHREAD_CONFIG_DEFAULT_MAX_TRANSMIT_POWER),
-    mSendHead(NULL),
-    mSendTail(NULL),
-    mReceiveHead(NULL),
-    mReceiveTail(NULL),
+Mac::Mac(otInstance &aInstance):
+    InstanceLocator(aInstance),
     mOperation(kOperationIdle),
     mPendingActiveScan(false),
     mPendingEnergyScan(false),
@@ -162,6 +149,17 @@ Mac::Mac(ThreadNetif &aThreadNetif):
 #if OPENTHREAD_CONFIG_STAY_AWAKE_BETWEEN_FRAGMENTS
     mDelaySleep(false),
 #endif
+    mMacTimer(aInstance, &Mac::HandleMacTimer, this),
+    mBackoffTimer(aInstance, &Mac::HandleBeginTransmit, this),
+    mReceiveTimer(aInstance, &Mac::HandleReceiveTimer, this),
+    mShortAddress(kShortAddrInvalid),
+    mPanId(0x1234 /* kPanIdBroadcast */ ),
+    mChannel(OPENTHREAD_CONFIG_DEFAULT_CHANNEL),
+    mMaxTransmitPower(OPENTHREAD_CONFIG_DEFAULT_MAX_TRANSMIT_POWER),
+    mSendHead(NULL),
+    mSendTail(NULL),
+    mReceiveHead(NULL),
+    mReceiveTail(NULL),
     mBeaconSequence(static_cast<uint8_t>(otPlatRandomGet())),
     mDataSequence(static_cast<uint8_t>(otPlatRandomGet())),
     mCsmaAttempts(0),
@@ -172,13 +170,13 @@ Mac::Mac(ThreadNetif &aThreadNetif):
     mEnergyScanCurrentMaxRssi(kInvalidRssiValue),
     mScanContext(NULL),
     mActiveScanHandler(NULL), // Initialize `mActiveScanHandler` and `mEnergyScanHandler` union
-    mEnergyScanSampleRssiTask(aThreadNetif.GetInstance(), &Mac::HandleEnergyScanSampleRssi, this),
+    mEnergyScanSampleRssiTask(aInstance, &Mac::HandleEnergyScanSampleRssi, this),
     mPcapCallback(NULL),
     mPcapCallbackContext(NULL),
 #if OPENTHREAD_ENABLE_MAC_FILTER
     mFilter(),
 #endif  // OPENTHREAD_ENABLE_MAC_FILTER
-    mTxFrame(static_cast<Frame *>(otPlatRadioGetTransmitBuffer(&aThreadNetif.GetInstance()))),
+    mTxFrame(static_cast<Frame *>(otPlatRadioGetTransmitBuffer(&aInstance))),
     mKeyIdMode2FrameCounter(0)
 {
     GenerateExtAddress(&mExtAddress);
@@ -198,10 +196,16 @@ otError Mac::ActiveScan(uint32_t aScanChannels, uint16_t aScanDuration, ActiveSc
 {
     otError error;
 
-    SuccessOrExit(error = Scan(kOperationActiveScan, aScanChannels, aScanDuration, aContext));
     mActiveScanHandler = aHandler;
+    SuccessOrExit(error = Scan(kOperationActiveScan, aScanChannels, aScanDuration, aContext));
 
 exit:
+
+    if (OT_ERROR_NONE != error)
+    {
+        mActiveScanHandler = NULL;
+    }
+
     return error;
 }
 
@@ -209,10 +213,16 @@ otError Mac::EnergyScan(uint32_t aScanChannels, uint16_t aScanDuration, EnergySc
 {
     otError error;
 
-    SuccessOrExit(error = Scan(kOperationEnergyScan, aScanChannels, aScanDuration, aContext));
     mEnergyScanHandler = aHandler;
+    SuccessOrExit(error = Scan(kOperationEnergyScan, aScanChannels, aScanDuration, aContext));
 
 exit:
+
+    if (OT_ERROR_NONE != error)
+    {
+        mEnergyScanHandler = NULL;
+    }
+
     return error;
 }
 
@@ -1795,8 +1805,8 @@ exit:
             mCounters.mRxErrInvalidSrcAddr++;
             break;
 
-        case OT_ERROR_WHITELIST_FILTERED:
-            mCounters.mRxWhitelistFiltered++;
+        case OT_ERROR_ADDRESS_FILTERED:
+            mCounters.mRxAddressFiltered++;
             break;
 
         case OT_ERROR_DESTINATION_ADDRESS_FILTERED:
@@ -1893,10 +1903,10 @@ void Mac::FillMacCountersTlv(NetworkDiagnostic::MacCountersTlv &aMacCounters) co
     aMacCounters.SetIfOutErrors(mCounters.mTxErrCca);
     aMacCounters.SetIfInUcastPkts(mCounters.mRxUnicast);
     aMacCounters.SetIfInBroadcastPkts(mCounters.mRxBroadcast);
-    aMacCounters.SetIfInDiscards(mCounters.mRxWhitelistFiltered + mCounters.mRxDestAddrFiltered + mCounters.mRxDuplicated);
+    aMacCounters.SetIfInDiscards(mCounters.mRxAddressFiltered + mCounters.mRxDestAddrFiltered + mCounters.mRxDuplicated);
     aMacCounters.SetIfOutUcastPkts(mCounters.mTxUnicast);
     aMacCounters.SetIfOutBroadcastPkts(mCounters.mTxBroadcast);
-    aMacCounters.SetIfOutDiscards(0);
+    aMacCounters.SetIfOutDiscards(mCounters.mTxErrBusyChannel);
 }
 
 void Mac::ResetCounters(void)

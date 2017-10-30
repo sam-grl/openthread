@@ -33,8 +33,6 @@
 
 #define WPP_NAME "network_data_leader.tmh"
 
-#include <openthread/config.h>
-
 #include "network_data_leader.hpp"
 
 #include <openthread/platform/random.h>
@@ -58,8 +56,8 @@ using ot::Encoding::BigEndian::HostSwap16;
 namespace ot {
 namespace NetworkData {
 
-LeaderBase::LeaderBase(ThreadNetif &aThreadNetif):
-    NetworkData(aThreadNetif, false)
+LeaderBase::LeaderBase(otInstance &aInstance):
+    NetworkData(aInstance, false)
 {
     Reset();
 }

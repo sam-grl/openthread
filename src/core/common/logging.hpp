@@ -34,7 +34,7 @@
 #ifndef LOGGING_HPP_
 #define LOGGING_HPP_
 
-#include <openthread/config.h>
+#include "openthread-core-config.h"
 
 #include <ctype.h>
 #include <stdio.h>
@@ -43,8 +43,6 @@
 #include <openthread/instance.h>
 #include <openthread/types.h>
 #include <openthread/platform/logging.h>
-
-#include "openthread-core-config.h"
 
 #ifdef WINDOWS_LOGGING
 #ifdef _KERNEL_MODE
@@ -742,7 +740,7 @@ extern "C" {
 /**
  * @def otLogCritCli
  *
- * This method generates a log with level critical for the CoAP region.
+ * This method generates a log with level critical for the CLI region.
  *
  * @param[in]  aInstance    A reference to the OpenThread instance.
  * @param[in]  aFormat      A pointer to the format string.
@@ -753,7 +751,7 @@ extern "C" {
 /**
  * @def otLogWarnCli
  *
- * This method generates a log with level warning for the CoAP region.
+ * This method generates a log with level warning for the CLI region.
  *
  * @param[in]  aInstance    A reference to the OpenThread instance.
  * @param[in]  aFormat      A pointer to the format string.
@@ -764,7 +762,7 @@ extern "C" {
 /**
  * @def otLogInfoCli
  *
- * This method generates a log with level info for the CoAP region.
+ * This method generates a log with level info for the CLI region.
  *
  * @param[in]  aInstance    A reference to the OpenThread instance.
  * @param[in]  aFormat      A pointer to the format string.
@@ -775,7 +773,7 @@ extern "C" {
 /**
  * @def otLogDebgCli
  *
- * This method generates a log with level debug for the CoAP region.
+ * This method generates a log with level debug for the CLI region.
  *
  * @param[in]  aInstance    A reference to the OpenThread instance.
  * @param[in]  aFormat      A pointer to the format string.
@@ -783,12 +781,12 @@ extern "C" {
  *
  */
 #if OPENTHREAD_CONFIG_LOG_CLI == 1
-#define otLogCritCli(aInstance, aFormat, ...) otLogCrit(&aInstance, OT_LOG_REGION_COAP, aFormat, ## __VA_ARGS__)
-#define otLogWarnCli(aInstance, aFormat, ...) otLogWarn(&aInstance, OT_LOG_REGION_COAP, aFormat, ## __VA_ARGS__)
-#define otLogInfoCli(aInstance, aFormat, ...) otLogInfo(&aInstance, OT_LOG_REGION_COAP, aFormat, ## __VA_ARGS__)
+#define otLogCritCli(aInstance, aFormat, ...) otLogCrit(&aInstance, OT_LOG_REGION_CLI, aFormat, ## __VA_ARGS__)
+#define otLogWarnCli(aInstance, aFormat, ...) otLogWarn(&aInstance, OT_LOG_REGION_CLI, aFormat, ## __VA_ARGS__)
+#define otLogInfoCli(aInstance, aFormat, ...) otLogInfo(&aInstance, OT_LOG_REGION_CLI, aFormat, ## __VA_ARGS__)
 #define otLogInfoCliErr(aInstance, aError, aFormat, ...)                \
-    otLogInfo(&aInstance, OT_LOG_REGION_COAP, "Error %s: " aFormat, otThreadErrorToString(aError), ## __VA_ARGS__)
-#define otLogDebgCli(aInstance, aFormat, ...) otLogDebg(&aInstance, OT_LOG_REGION_COAP, aFormat, ## __VA_ARGS__)
+    otLogInfo(&aInstance, OT_LOG_REGION_CLI, "Error %s: " aFormat, otThreadErrorToString(aError), ## __VA_ARGS__)
+#define otLogDebgCli(aInstance, aFormat, ...) otLogDebg(&aInstance, OT_LOG_REGION_CLI, aFormat, ## __VA_ARGS__)
 #else
 #define otLogCritCli(aInstance, aFormat, ...)
 #define otLogWarnCli(aInstance, aFormat, ...)

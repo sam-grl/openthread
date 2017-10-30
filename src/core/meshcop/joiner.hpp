@@ -34,6 +34,8 @@
 #ifndef JOINER_HPP_
 #define JOINER_HPP_
 
+#include "openthread-core-config.h"
+
 #include <openthread/joiner.h>
 
 #include "coap/coap.hpp"
@@ -52,16 +54,16 @@ class ThreadNetif;
 
 namespace MeshCoP {
 
-class Joiner: public ThreadNetifLocator
+class Joiner: public InstanceLocator
 {
 public:
     /**
      * This constructor initializes the Joiner object.
      *
-     * @param[in]  aThreadNetif  A reference to the Thread network interface.
+     * @param[in]  aInstance     A reference to the OpenThread instance.
      *
      */
-    Joiner(ThreadNetif &aThreadNetif);
+    Joiner(otInstance &aInstance);
 
     /**
      * This method starts the Joiner service.
@@ -111,6 +113,16 @@ private:
     {
         kConfigExtAddressDelay = 100,  ///< milliseconds
         kTimeout               = 4000, ///< milliseconds
+        kSpecificPriorityBonus = (1 << 9),
+    };
+
+    struct JoinerRouter
+    {
+        Mac::ExtAddress mExtAddr;
+        uint16_t mPriority;
+        uint16_t mPanId;
+        uint16_t mJoinerUdpPort;
+        uint8_t mChannel;
     };
 
     static void HandleDiscoverResult(otActiveScanResult *aResult, void *aContext);
@@ -121,6 +133,9 @@ private:
 
     void Close(void);
     void Complete(otError aError);
+
+    void AddJoinerRouter(JoinerRouter &aJoinerRouter);
+    otError TryNextJoin();
 
     static void HandleSecureCoapClientConnect(bool aConnected, void *aContext);
     void HandleSecureCoapClientConnect(bool aConnected);
@@ -146,12 +161,7 @@ private:
     uint16_t mCcitt;
     uint16_t mAnsi;
 
-    bool mJoinerRouterIsSpecific;
-    uint8_t mJoinerRouterChannel;
-    int8_t mJoinerRouterRssi;
-    uint16_t mJoinerRouterPanId;
-    uint16_t mJoinerUdpPort;
-    Mac::ExtAddress mJoinerRouter;
+    JoinerRouter mJoinerRouters[OPENTHREAD_CONFIG_MAX_JOINER_ROUTER_ENTRIES];
 
     const char *mVendorName;
     const char *mVendorModel;

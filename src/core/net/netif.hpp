@@ -34,6 +34,8 @@
 #ifndef NET_NETIF_HPP_
 #define NET_NETIF_HPP_
 
+#include "openthread-core-config.h"
+
 #include "common/locator.hpp"
 #include "common/message.hpp"
 #include "common/tasklet.hpp"
@@ -250,7 +252,7 @@ private:
  * This class implements an IPv6 network interface.
  *
  */
-class Netif: public Ip6Locator
+class Netif: public InstanceLocator
 {
     friend class Ip6;
 
@@ -258,11 +260,11 @@ public:
     /**
      * This constructor initializes the network interface.
      *
-     * @param[in]  aIp6             A reference to the IPv6 network object.
+     * @param[in]  aInstance        A reference to the OpenThread instance.
      * @param[in]  aInterfaceId     The interface ID for this object.
      *
      */
-    Netif(Ip6 &aIp6, int8_t aInterfaceId);
+    Netif(otInstance &aInstance, int8_t aInterfaceId);
 
     /**
      * This method returns the next network interface in the list.
