@@ -652,7 +652,7 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
 
     memset(&sockaddr, 0, sizeof(sockaddr));
     sockaddr.sin_family = AF_INET;
-    inet_pton(AF_INET, "224.0.0.142", &sockaddr.sin_addr); // send all output to multicast group (to Python script)
+    inet_pton(AF_INET, "localhost", &sockaddr.sin_addr); // send all output unicast, to Python script that simulates network
 
 	ssize_t rval;
 

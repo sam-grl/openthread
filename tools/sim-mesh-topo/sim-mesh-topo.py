@@ -45,19 +45,20 @@ def main():
 	if len(sys.argv) > 1:
 		MATRIX = eval(sys.argv[1])
 		
-	# Create a UDP socket for receiving (multicast)
+	# Create a UDP socket for receiving sent 15.4 frames (unicast, from sources)
 	sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-	# Create a UDP socket for sending (to destinations)
+	# Create a UDP socket for sending 15.4 frames (unicast, to destinations)
 	sockd = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 
-	# Bind the receiving socket to the port
+	# Bind the receiving socket (localhost IPv6 address) to the port
 	server_address = ('', RCV_UDP_PORT)
 	sock.bind(server_address)
 
 	# Register to multicast group as listener
-	mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
-	sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+	#mreq = struct.pack("4sl", socket.inet_aton(MCAST_GRP), socket.INADDR_ANY)
+	#sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, mreq)
+	
 	print 'sim-mesh-topo.py - server started on address \'%s\' UDP port %s' % server_address
 	print '   selected network topology function: %s (%s)' % ( MATRIX.__name__ , MATRIX.__doc__ )
 
