@@ -842,7 +842,7 @@ extern void otPlatDiagRadioTransmitDone(otInstance *aInstance, otRadioFrame *aFr
  *
  * @param[in] aInstance  The OpenThread instance structure.
  *
- * @returns The RSSI in dBm when it is valid.  127 when RSSI is invalid.
+ * @returns The RSSI in dBm when it is valid. OT_RADIO_RSSI_INVALID when RSSI is invalid.
  *
  */
 int8_t otPlatRadioGetRssi(otInstance *aInstance);

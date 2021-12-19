@@ -63,16 +63,19 @@
 enum
 {
     OT_SIM_EVENT_ALARM_FIRED        = 0,
-    OT_SIM_EVENT_RADIO_RECEIVED     = 1,
+    OT_SIM_EVENT_RADIO_FRAME        = 1,
     OT_SIM_EVENT_UART_WRITE         = 2,
     OT_SIM_EVENT_RADIO_SPINEL_WRITE = 3,
     OT_SIM_EVENT_OTNS_STATUS_PUSH   = 5,
+	OT_SIM_EVENT_RADIO_TX_DONE      = 6,
+	OT_SIM_EVENT_RADIO_RX_START     = 7,
     OT_EVENT_DATA_MAX_SIZE          = 1024,
 };
 
 OT_TOOL_PACKED_BEGIN
 struct Event
 {
+	uint64_t mTimestamp;
     uint64_t mDelay;
     uint8_t  mEvent;
     uint16_t mDataLength;
@@ -152,11 +155,27 @@ void platformRadioDeinit(void);
  * This function inputs a received radio frame.
  *
  * @param[in]  aInstance   A pointer to the OpenThread instance.
- * @param[in]  aBuf        A pointer to the received radio frame.
+ * @param[in]  aBuf        A pointer to the received radio frame (RadioMessage).
  * @param[in]  aBufLength  The size of the received radio frame.
  *
  */
 void platformRadioReceive(otInstance *aInstance, uint8_t *aBuf, uint16_t aBufLength);
+
+/**
+ * This function signals that virtual radio is done transmitting a single frame.
+ *
+ * @param[in]  aInstance   A pointer to the OpenThread instance.
+ * @param[in]  err         The status code result of the virtual radio transmission.
+ *
+ */
+void platformRadioTransmitDone(otInstance *aInstance, otError err);
+
+/**
+ * This function signals that the virtual radio has started to receive a frame.
+ *
+ */
+void platformRadioReceiveStart(otInstance *aInstance);
+
 
 /**
  * This function updates the file descriptor sets with file descriptors used by the radio driver.
@@ -207,7 +226,7 @@ void platformUartProcess(void);
 void platformUartRestore(void);
 
 /**
- * This function sends a simulation event.
+ * This function sends a simulation event to the external simulator process.
  *
  * @param[in]   aEvent  A pointer to the simulation event to send
  *

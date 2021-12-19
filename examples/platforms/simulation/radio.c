@@ -65,6 +65,9 @@ enum
     SIM_HIGH_RSSI_PROB_INC_PER_CHANNEL = 5,
 };
 
+// time (us) of the 4 bytes PHY preamble
+const uint64_t	PHY_PREAMBLE_TIME = (4 * 8 * 1000000) / OT_RADIO_BIT_RATE;
+
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME
 extern int      sSockFd;
 extern uint16_t sPortOffset;
@@ -81,16 +84,20 @@ enum
     SIM_RADIO_CHANNEL_MAX = OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MAX,
 };
 
+/**
+ * RadioMessage serializes transmitted/received radio frames (with metadata) in event messages over sockets.
+ */
 OT_TOOL_PACKED_BEGIN
 struct RadioMessage
 {
     uint8_t mChannel;
+    int8_t  mRssiOrTxPower;
     uint8_t mPsdu[OT_RADIO_FRAME_MAX_SIZE];
 } OT_TOOL_PACKED_END;
 
 static void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame);
 static void radioSendMessage(otInstance *aInstance);
-static void radioSendAck(void);
+static void radioSendAck(otInstance *aInstance);
 static void radioProcessFrame(otInstance *aInstance);
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
 static uint8_t generateAckIeData(uint8_t *aLinkMetricsIeData, uint8_t aLinkMetricsIeDataLen);
@@ -496,7 +503,11 @@ int8_t otPlatRadioGetRssi(otInstance *aInstance)
 
     assert(aInstance != NULL);
 
-    int8_t   rssi    = SIM_LOW_RSSI_SAMPLE;
+#if OPENTHREAD_SIMULATION_VIRTUAL_TIME
+    return sReceiveFrame.mInfo.mRxInfo.mRssi;
+
+#else
+    int8_t rssi = SIM_LOW_RSSI_SAMPLE;
     uint8_t  channel = sReceiveFrame.mChannel;
     uint32_t probabilityThreshold;
 
@@ -513,8 +524,10 @@ int8_t otPlatRadioGetRssi(otInstance *aInstance)
         rssi = SIM_HIGH_RSSI_SAMPLE;
     }
 
-exit:
-    return rssi;
+    exit:
+        return rssi;
+#endif
+
 }
 
 otRadioCaps otPlatRadioGetCaps(otInstance *aInstance)
@@ -543,23 +556,12 @@ static void radioReceive(otInstance *aInstance)
     otEXPECT(sReceiveFrame.mChannel == sReceiveMessage.mChannel);
     otEXPECT(sState == OT_RADIO_STATE_RECEIVE || sState == OT_RADIO_STATE_TRANSMIT);
 
-    // Unable to simulate SFD, so use the rx done timestamp instead.
-    sReceiveFrame.mInfo.mRxInfo.mTimestamp = otPlatTimeGet();
-
     if (sTxWait)
     {
         if (otMacFrameIsAckRequested(&sTransmitFrame))
         {
             isTxDone = isAck && otMacFrameGetSequence(&sReceiveFrame) == otMacFrameGetSequence(&sTransmitFrame);
         }
-#if OPENTHREAD_SIMULATION_VIRTUAL_TIME
-        // Simulate tx done when receiving the echo frame.
-        else
-        {
-            isTxDone = !isAck && sTransmitFrame.mLength == sReceiveFrame.mLength &&
-                       memcmp(sTransmitFrame.mPsdu, sReceiveFrame.mPsdu, sTransmitFrame.mLength) == 0;
-        }
-#endif
     }
 
     if (isTxDone)
@@ -686,7 +688,9 @@ void radioSendMessage(otInstance *aInstance)
 #endif
 
     sTransmitMessage.mChannel = sTransmitFrame.mChannel;
-
+    int8_t txPow;
+    otPlatRadioGetTransmitPower(aInstance, &txPow);
+    sTransmitMessage.mRssiOrTxPower = txPow;
     otEXPECT(radioProcessTransmitSecurity(&sTransmitFrame) == OT_ERROR_NONE);
     otPlatRadioTxStarted(aInstance, &sTransmitFrame);
     radioComputeCrc(&sTransmitMessage, sTransmitFrame.mLength);
@@ -712,7 +716,7 @@ void radioSendMessage(otInstance *aInstance)
         }
     }
 #else
-    // Wait for echo radio in virtual time mode.
+    // Wait for transmit status return event in virtual time mode.
     sTxWait = true;
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME
 exit:
@@ -728,13 +732,48 @@ bool platformRadioIsTransmitPending(void)
 void platformRadioReceive(otInstance *aInstance, uint8_t *aBuf, uint16_t aBufLength)
 {
     assert(sizeof(sReceiveMessage) >= aBufLength);
-
     memcpy(&sReceiveMessage, aBuf, aBufLength);
-
-    sReceiveFrame.mLength = (uint8_t)(aBufLength - 1);
+    sReceiveFrame.mLength = (uint8_t)(aBufLength - offsetof(struct RadioMessage, mPsdu) );
+    sReceiveFrame.mInfo.mRxInfo.mRssi = sReceiveMessage.mRssiOrTxPower;
 
     radioReceive(aInstance);
 }
+
+void platformRadioTransmitDone(otInstance *aInstance, otError err)
+{
+    otEXPECT(sState == OT_RADIO_STATE_TRANSMIT);
+    if (!otMacFrameIsAckRequested(&sTransmitFrame) ||	// not waiting for ACK: transition to Rx state; see state diagram.
+    		err != OT_ERROR_NONE ) {					// also in case of Tx failure: no wait for ACK
+    	sState  = OT_RADIO_STATE_RECEIVE;
+    	sTxWait = false;
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+		if (otPlatDiagModeGet())
+		{
+			otPlatDiagRadioTransmitDone(aInstance, &sTransmitFrame, err);
+		}
+		else
+#endif
+		{
+			otPlatRadioTxDone(aInstance, &sTransmitFrame, NULL, err);
+		}
+    }
+
+exit:
+    return;
+}
+
+void platformRadioReceiveStart(otInstance *aInstance)
+{
+	OT_UNUSED_VARIABLE(aInstance);
+    otEXPECT(sState == OT_RADIO_STATE_RECEIVE);
+    //otEXPECT(sRxWait == false);
+    // Rx time is set at start of receiving SFD, so 4 bytes after PPDU Tx start.
+    sReceiveFrame.mInfo.mRxInfo.mTimestamp = otPlatTimeGet() + PHY_PREAMBLE_TIME;
+    // sRxWait = true;
+    exit:
+        return;
+}
+
 #else
 void platformRadioUpdateFdSet(fd_set *aReadFdSet, fd_set *aWriteFdSet, int *aMaxFd)
 {
@@ -839,17 +878,17 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
     }
 #else  // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
     struct Event event;
-
-    event.mDelay      = 1; // 1us for now
-    event.mEvent      = OT_SIM_EVENT_RADIO_RECEIVED;
-    event.mDataLength = 1 + aFrame->mLength; // include channel in first byte
+    event.mTimestamp  = sNow;
+    event.mDelay      = 1; // 1us - minimal delay just to let the transmitted frame arrive in the simulated radio chip.
+    event.mEvent      = OT_SIM_EVENT_RADIO_FRAME;
+    event.mDataLength = offsetof(struct RadioMessage, mPsdu) + aFrame->mLength; // RadioMessage includes metadata in first bytes, then the frame
     memcpy(event.mData, aMessage, event.mDataLength);
 
     otSimSendEvent(&event);
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
 }
 
-void radioSendAck(void)
+void radioSendAck(otInstance *aInstance)
 {
     if (
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
@@ -908,6 +947,9 @@ void radioSendAck(void)
     }
 
     sAckMessage.mChannel = sReceiveFrame.mChannel;
+    int8_t txPow;
+    otPlatRadioGetTransmitPower(aInstance, &txPow);
+    sAckMessage.mRssiOrTxPower = txPow;
 
     radioComputeCrc(&sAckMessage, sAckFrame.mLength);
     radioTransmit(&sAckMessage, &sAckFrame);
@@ -924,9 +966,8 @@ void radioProcessFrame(otInstance *aInstance)
     otMacAddress macAddress;
     OT_UNUSED_VARIABLE(macAddress);
 
-    sReceiveFrame.mInfo.mRxInfo.mRssi = -20;
     sReceiveFrame.mInfo.mRxInfo.mLqi  = OT_RADIO_LQI_NONE;
-
+    //sReceiveFrame.mInfo.mRxInfo.mRssi is already set earlier in the call stack
     sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending = false;
     sReceiveFrame.mInfo.mRxInfo.mAckedWithSecEnhAck    = false;
 
@@ -942,7 +983,7 @@ void radioProcessFrame(otInstance *aInstance)
     // generate acknowledgment
     if (otMacFrameIsAckRequested(&sReceiveFrame))
     {
-        radioSendAck();
+        radioSendAck(aInstance);
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
         if (otMacFrameIsSecurityEnabled(&sAckFrame))
         {
