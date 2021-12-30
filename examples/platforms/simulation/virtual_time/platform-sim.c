@@ -109,7 +109,7 @@ static void receiveEvent(otInstance *aInstance)
     	// Nothing to do. Alarm event is only used to advance time (see above).
         break;
 
-    case OT_SIM_EVENT_RADIO_FRAME:		// Rx of a radio frame is done. Here's struct RadioMessage.
+    case OT_SIM_EVENT_RADIO_FRAME_RX:		// Rx of a radio frame is done. Here's struct RadioMessage.
         platformRadioReceive(aInstance, event.mData, event.mDataLength);
         break;
 
@@ -138,7 +138,7 @@ static void platformSendSleepEvent(void)
     struct Event event;
 
     assert(platformAlarmGetNext() > 0);
-    event.mTimestamp  = sNow;
+    //TODO event.mTimestamp  = sNow;
     event.mDelay      = platformAlarmGetNext();
     event.mEvent      = OT_SIM_EVENT_ALARM_FIRED;
     event.mDataLength = 0;
@@ -337,7 +337,7 @@ void otPlatOtnsStatus(const char *aStatus)
     memcpy(event.mData, aStatus, statusLength);
     event.mDataLength = statusLength;
     event.mDelay      = 0;
-    event.mTimestamp  = sNow;
+    // TODO event.mTimestamp  = sNow;
     event.mEvent      = OT_SIM_EVENT_OTNS_STATUS_PUSH;
 
     otSimSendEvent(&event);

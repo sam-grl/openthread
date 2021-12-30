@@ -187,7 +187,6 @@ static bool hasFramePending(const otRadioFrame *aFrame)
     case OT_MAC_ADDRESS_TYPE_EXTENDED:
     {
         otExtAddress extAddr;
-
         ReverseExtAddress(&extAddr, &src.mAddress.mExtAddress);
         rval = utilsSoftSrcMatchExtFindEntry(&extAddr) >= 0;
         break;
@@ -878,9 +877,9 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
     }
 #else  // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
     struct Event event;
-    event.mTimestamp  = sNow;
+    //TODO event.mTimestamp  = platformAlarmGetNow();
     event.mDelay      = 1; // 1us - minimal delay just to let the transmitted frame arrive in the simulated radio chip.
-    event.mEvent      = OT_SIM_EVENT_RADIO_FRAME;
+    event.mEvent      = OT_SIM_EVENT_RADIO_FRAME_TX;
     event.mDataLength = offsetof(struct RadioMessage, mPsdu) + aFrame->mLength; // RadioMessage includes metadata in first bytes, then the frame
     memcpy(event.mData, aMessage, event.mDataLength);
 
@@ -968,6 +967,7 @@ void radioProcessFrame(otInstance *aInstance)
 
     sReceiveFrame.mInfo.mRxInfo.mLqi  = OT_RADIO_LQI_NONE;
     //sReceiveFrame.mInfo.mRxInfo.mRssi is already set earlier in the call stack
+    sReceiveFrame.mInfo.mRxInfo.mTimestamp = otPlatTimeGet(); // FIXME disable this once evt up;
     sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending = false;
     sReceiveFrame.mInfo.mRxInfo.mAckedWithSecEnhAck    = false;
 

@@ -63,19 +63,19 @@
 enum
 {
     OT_SIM_EVENT_ALARM_FIRED        = 0,
-    OT_SIM_EVENT_RADIO_FRAME        = 1,
+    OT_SIM_EVENT_RADIO_FRAME_RX     = 1,
     OT_SIM_EVENT_UART_WRITE         = 2,
     OT_SIM_EVENT_RADIO_SPINEL_WRITE = 3,
     OT_SIM_EVENT_OTNS_STATUS_PUSH   = 5,
 	OT_SIM_EVENT_RADIO_TX_DONE      = 6,
 	OT_SIM_EVENT_RADIO_RX_START     = 7,
+	OT_SIM_EVENT_RADIO_FRAME_TX     = 8,
     OT_EVENT_DATA_MAX_SIZE          = 1024,
 };
 
 OT_TOOL_PACKED_BEGIN
 struct Event
 {
-	uint64_t mTimestamp;
     uint64_t mDelay;
     uint8_t  mEvent;
     uint16_t mDataLength;
