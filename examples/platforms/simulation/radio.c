@@ -91,13 +91,12 @@ OT_TOOL_PACKED_BEGIN
 struct RadioMessage
 {
     uint8_t mChannel;
-    int8_t  mRssiOrTxPower;
     uint8_t mPsdu[OT_RADIO_FRAME_MAX_SIZE];
 } OT_TOOL_PACKED_END;
 
 static void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame);
 static void radioSendMessage(otInstance *aInstance);
-static void radioSendAck(otInstance *aInstance);
+static void radioSendAck(void);
 static void radioProcessFrame(otInstance *aInstance);
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
 static uint8_t generateAckIeData(uint8_t *aLinkMetricsIeData, uint8_t aLinkMetricsIeDataLen);
@@ -687,9 +686,6 @@ void radioSendMessage(otInstance *aInstance)
 #endif
 
     sTransmitMessage.mChannel = sTransmitFrame.mChannel;
-    int8_t txPow;
-    otPlatRadioGetTransmitPower(aInstance, &txPow);
-    sTransmitMessage.mRssiOrTxPower = txPow;
     otEXPECT(radioProcessTransmitSecurity(&sTransmitFrame) == OT_ERROR_NONE);
     otPlatRadioTxStarted(aInstance, &sTransmitFrame);
     radioComputeCrc(&sTransmitMessage, sTransmitFrame.mLength);
@@ -728,12 +724,12 @@ bool platformRadioIsTransmitPending(void)
 }
 
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME
-void platformRadioReceive(otInstance *aInstance, uint8_t *aBuf, uint16_t aBufLength)
+void platformRadioReceive(otInstance *aInstance, uint8_t *aBuf, uint16_t aBufLength, int8_t rssi)
 {
     assert(sizeof(sReceiveMessage) >= aBufLength);
     memcpy(&sReceiveMessage, aBuf, aBufLength);
     sReceiveFrame.mLength = (uint8_t)(aBufLength - offsetof(struct RadioMessage, mPsdu) );
-    sReceiveFrame.mInfo.mRxInfo.mRssi = sReceiveMessage.mRssiOrTxPower;
+    sReceiveFrame.mInfo.mRxInfo.mRssi = rssi;
 
     radioReceive(aInstance);
 }
@@ -765,10 +761,10 @@ void platformRadioReceiveStart(otInstance *aInstance)
 {
 	OT_UNUSED_VARIABLE(aInstance);
     otEXPECT(sState == OT_RADIO_STATE_RECEIVE);
-    //otEXPECT(sRxWait == false);
+
     // Rx time is set at start of receiving SFD, so 4 bytes after PPDU Tx start.
     sReceiveFrame.mInfo.mRxInfo.mTimestamp = otPlatTimeGet() + PHY_PREAMBLE_TIME;
-    // sRxWait = true;
+
     exit:
         return;
 }
@@ -877,17 +873,19 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
     }
 #else  // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
     struct Event event;
-    //TODO event.mTimestamp  = platformAlarmGetNow();
     event.mDelay      = 1; // 1us - minimal delay just to let the transmitted frame arrive in the simulated radio chip.
     event.mEvent      = OT_SIM_EVENT_RADIO_FRAME_TX;
-    event.mDataLength = offsetof(struct RadioMessage, mPsdu) + aFrame->mLength; // RadioMessage includes metadata in first bytes, then the frame
+    // event mParam contains the TxPower used.
+    int8_t maxPower   = sChannelMaxTransmitPower[sCurrentChannel - kMinChannel];
+    event.mParam	  = sTxPower < maxPower ? sTxPower : maxPower;
+    event.mDataLength = offsetof(struct RadioMessage, mPsdu) + aFrame->mLength; // RadioMessage includes metadata and the PDSU (frame)
     memcpy(event.mData, aMessage, event.mDataLength);
 
     otSimSendEvent(&event);
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
 }
 
-void radioSendAck(otInstance *aInstance)
+void radioSendAck(void)
 {
     if (
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
@@ -946,10 +944,6 @@ void radioSendAck(otInstance *aInstance)
     }
 
     sAckMessage.mChannel = sReceiveFrame.mChannel;
-    int8_t txPow;
-    otPlatRadioGetTransmitPower(aInstance, &txPow);
-    sAckMessage.mRssiOrTxPower = txPow;
-
     radioComputeCrc(&sAckMessage, sAckFrame.mLength);
     radioTransmit(&sAckMessage, &sAckFrame);
 
@@ -983,7 +977,7 @@ void radioProcessFrame(otInstance *aInstance)
     // generate acknowledgment
     if (otMacFrameIsAckRequested(&sReceiveFrame))
     {
-        radioSendAck(aInstance);
+        radioSendAck();
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
         if (otMacFrameIsSecurityEnabled(&sAckFrame))
         {

@@ -77,7 +77,8 @@ OT_TOOL_PACKED_BEGIN
 struct Event
 {
     uint64_t mDelay;
-    uint8_t  mEvent;
+    uint8_t  mEvent;       // contains one of OT_SIM_EVENT_* event types
+    int8_t   mParam;       // generic parameter used by some event types
     uint16_t mDataLength;
     uint8_t  mData[OT_EVENT_DATA_MAX_SIZE];
 } OT_TOOL_PACKED_END;
@@ -157,9 +158,10 @@ void platformRadioDeinit(void);
  * @param[in]  aInstance   A pointer to the OpenThread instance.
  * @param[in]  aBuf        A pointer to the received radio frame (RadioMessage).
  * @param[in]  aBufLength  The size of the received radio frame.
+ * @param[in]  rssi        The RSSI (dBm) of the received radio frame.
  *
  */
-void platformRadioReceive(otInstance *aInstance, uint8_t *aBuf, uint16_t aBufLength);
+void platformRadioReceive(otInstance *aInstance, uint8_t *aBuf, uint16_t aBufLength, int8_t rssi);
 
 /**
  * This function signals that virtual radio is done transmitting a single frame.
