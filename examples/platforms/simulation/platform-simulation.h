@@ -153,11 +153,11 @@ void platformRadioInit(void);
 void platformRadioDeinit(void);
 
 /**
- * This function inputs a received radio frame.
+ * This function inputs a received virtual radio frame.
  *
  * @param[in]  aInstance   A pointer to the OpenThread instance.
  * @param[in]  aBuf        A pointer to the received radio frame (RadioMessage).
- * @param[in]  aBufLength  The size of the received radio frame.
+ * @param[in]  aBufLength  The size of the received radio frame (RadioMessage).
  * @param[in]  rssi        The RSSI (dBm) of the received radio frame.
  *
  */
@@ -171,13 +171,6 @@ void platformRadioReceive(otInstance *aInstance, uint8_t *aBuf, uint16_t aBufLen
  *
  */
 void platformRadioTransmitDone(otInstance *aInstance, otError err);
-
-/**
- * This function signals that the virtual radio has started to receive a frame.
- *
- */
-void platformRadioReceiveStart(otInstance *aInstance);
-
 
 /**
  * This function updates the file descriptor sets with file descriptors used by the radio driver.

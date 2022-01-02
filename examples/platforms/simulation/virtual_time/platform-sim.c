@@ -120,10 +120,6 @@ static void receiveEvent(otInstance *aInstance)
     	platformRadioTransmitDone(aInstance, err);
         break;
 
-    case OT_SIM_EVENT_RADIO_RX_START:	// ext simulator indicates Rx is now starting
-    	platformRadioReceiveStart(aInstance);
-        break;
-
     case OT_SIM_EVENT_UART_WRITE:
         otPlatUartReceived(event.mData, event.mDataLength);
         break;

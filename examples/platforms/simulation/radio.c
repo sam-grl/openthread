@@ -727,11 +727,19 @@ bool platformRadioIsTransmitPending(void)
 void platformRadioReceive(otInstance *aInstance, uint8_t *aBuf, uint16_t aBufLength, int8_t rssi)
 {
     assert(sizeof(sReceiveMessage) >= aBufLength);
+    otEXPECT(sReceiveFrame.mChannel == aBuf[0]);  // Only process RadioMessages on my current listening channel.
+    otEXPECT(sState == OT_RADIO_STATE_RECEIVE || sState == OT_RADIO_STATE_TRANSMIT); // Only process in valid states.
+
     memcpy(&sReceiveMessage, aBuf, aBufLength);
     sReceiveFrame.mLength = (uint8_t)(aBufLength - offsetof(struct RadioMessage, mPsdu) );
     sReceiveFrame.mInfo.mRxInfo.mRssi = rssi;
+    sReceiveFrame.mInfo.mRxInfo.mLqi  = OT_RADIO_LQI_NONE;    // No support of LQI reporting.
+    sReceiveFrame.mInfo.mRxInfo.mTimestamp = otPlatTimeGet(); // Timestamp the moment of complete frame reception.
 
     radioReceive(aInstance);
+
+exit:
+	return;
 }
 
 void platformRadioTransmitDone(otInstance *aInstance, otError err)
@@ -755,18 +763,6 @@ void platformRadioTransmitDone(otInstance *aInstance, otError err)
 
 exit:
     return;
-}
-
-void platformRadioReceiveStart(otInstance *aInstance)
-{
-	OT_UNUSED_VARIABLE(aInstance);
-    otEXPECT(sState == OT_RADIO_STATE_RECEIVE);
-
-    // Rx time is set at start of receiving SFD, so 4 bytes after PPDU Tx start.
-    sReceiveFrame.mInfo.mRxInfo.mTimestamp = otPlatTimeGet() + PHY_PREAMBLE_TIME;
-
-    exit:
-        return;
 }
 
 #else
@@ -959,13 +955,10 @@ void radioProcessFrame(otInstance *aInstance)
     otMacAddress macAddress;
     OT_UNUSED_VARIABLE(macAddress);
 
-    sReceiveFrame.mInfo.mRxInfo.mLqi  = OT_RADIO_LQI_NONE;
-    //sReceiveFrame.mInfo.mRxInfo.mRssi is already set earlier in the call stack
-    sReceiveFrame.mInfo.mRxInfo.mTimestamp = otPlatTimeGet(); // FIXME disable this once evt up;
     sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending = false;
     sReceiveFrame.mInfo.mRxInfo.mAckedWithSecEnhAck    = false;
 
-    otEXPECT(sPromiscuous == false);
+    otEXPECT_ACTION(sPromiscuous == false, error = OT_ERROR_NOT_CAPABLE); // Promiscuous not yet considered.
 
     otEXPECT_ACTION(otMacFrameDoesAddrMatch(&sReceiveFrame, sPanid, sShortAddress, &sExtAddress),
                     error = OT_ERROR_ABORT);
