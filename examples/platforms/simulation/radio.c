@@ -744,23 +744,38 @@ exit:
 
 void platformRadioTransmitDone(otInstance *aInstance, otError err)
 {
-    otEXPECT(sState == OT_RADIO_STATE_TRANSMIT);
-    if (!otMacFrameIsAckRequested(&sTransmitFrame) ||	// not waiting for ACK: transition to Rx state; see state diagram.
-    		err != OT_ERROR_NONE ) {					// also in case of Tx failure: no wait for ACK
-    	sState  = OT_RADIO_STATE_RECEIVE;
-    	sTxWait = false;
+    otEXPECT(sState == OT_RADIO_STATE_TRANSMIT || sState == OT_RADIO_STATE_RECEIVE);
+
+    if (sState == OT_RADIO_STATE_TRANSMIT) {
+		if (!otMacFrameIsAckRequested(&sTransmitFrame) ||	// not waiting for ACK: transition to Rx state; see state diagram.
+				err != OT_ERROR_NONE ) {					// also in case of Tx failure: no wait for ACK, abort current Tx.
+			sState  = OT_RADIO_STATE_RECEIVE;
+			sTxWait = false;
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
-		if (otPlatDiagModeGet())
-		{
-			otPlatDiagRadioTransmitDone(aInstance, &sTransmitFrame, err);
-		}
-		else
+			if (otPlatDiagModeGet())
+			{
+				otPlatDiagRadioTransmitDone(aInstance, &sTransmitFrame, err);
+			}
+			else
 #endif
-		{
-			otPlatRadioTxDone(aInstance, &sTransmitFrame, NULL, err);
+			{
+				otPlatRadioTxDone(aInstance, &sTransmitFrame, NULL, err);
+			}
 		}
     }
-
+    else if (sState == OT_RADIO_STATE_RECEIVE) {  // Ack transmit is done for received packet.
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+        if (otPlatDiagModeGet())
+        {
+            otPlatDiagRadioReceiveDone(aInstance, &sReceiveFrame, OT_ERROR_NONE);
+        }
+        else
+#endif
+        {
+        	// ignore any error in ACK transmit. Frame reception was ok.
+        	otPlatRadioReceiveDone(aInstance, &sReceiveFrame, OT_ERROR_NONE);
+        }
+    }
 exit:
     return;
 }
@@ -951,6 +966,7 @@ exit:
 
 void radioProcessFrame(otInstance *aInstance)
 {
+	bool         isAcked = false;
     otError      error = OT_ERROR_NONE;
     otMacAddress macAddress;
     OT_UNUSED_VARIABLE(macAddress);
@@ -970,6 +986,7 @@ void radioProcessFrame(otInstance *aInstance)
     // generate acknowledgment
     if (otMacFrameIsAckRequested(&sReceiveFrame))
     {
+    	isAcked = true;
         radioSendAck();
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
         if (otMacFrameIsSecurityEnabled(&sAckFrame))
@@ -982,7 +999,10 @@ void radioProcessFrame(otInstance *aInstance)
 
 exit:
 
-    if (error != OT_ERROR_ABORT)
+	// if Rx frame needs to be ACKed, postpone the receive-done report until ACK sent, if the frame-rx went ok.
+    // TODO consider if this is right. It's done to avoid stack sending new frames in response while the ACK is still pending.
+    if ( error != OT_ERROR_ABORT &&
+    	 ( (!isAcked) || (error != OT_ERROR_NONE && isAcked) )  )
     {
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
         if (otPlatDiagModeGet())
