@@ -65,9 +65,6 @@ enum
     SIM_HIGH_RSSI_PROB_INC_PER_CHANNEL = 5,
 };
 
-// time (us) of the 4 bytes PHY preamble
-const uint64_t	PHY_PREAMBLE_TIME = (4 * 8 * 1000000) / OT_RADIO_BIT_RATE;
-
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME
 extern int      sSockFd;
 extern uint16_t sPortOffset;
@@ -94,7 +91,7 @@ struct RadioMessage
     uint8_t mPsdu[OT_RADIO_FRAME_MAX_SIZE];
 } OT_TOOL_PACKED_END;
 
-static void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame);
+static void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame, bool isAck);
 static void radioSendMessage(otInstance *aInstance);
 static void radioSendAck(void);
 static void radioProcessFrame(otInstance *aInstance);
@@ -689,7 +686,7 @@ void radioSendMessage(otInstance *aInstance)
     otEXPECT(radioProcessTransmitSecurity(&sTransmitFrame) == OT_ERROR_NONE);
     otPlatRadioTxStarted(aInstance, &sTransmitFrame);
     radioComputeCrc(&sTransmitMessage, sTransmitFrame.mLength);
-    radioTransmit(&sTransmitMessage, &sTransmitFrame);
+    radioTransmit(&sTransmitMessage, &sTransmitFrame, false);
 
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
     sTxWait = otMacFrameIsAckRequested(&sTransmitFrame);
@@ -863,7 +860,7 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
     }
 }
 
-void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame)
+void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame, bool isAck)
 {
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
     ssize_t            rval;
@@ -885,7 +882,7 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
 #else  // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
     struct Event event;
     event.mDelay      = 1; // 1us - minimal delay just to let the transmitted frame arrive in the simulated radio chip.
-    event.mEvent      = OT_SIM_EVENT_RADIO_FRAME_TX;
+    event.mEvent      = isAck ? OT_SIM_EVENT_RADIO_FRAME_TX_ACK : OT_SIM_EVENT_RADIO_FRAME_TX;
     // event mParam contains the TxPower used.
     int8_t maxPower   = sChannelMaxTransmitPower[sCurrentChannel - kMinChannel];
     event.mParam	  = sTxPower < maxPower ? sTxPower : maxPower;
@@ -956,7 +953,7 @@ void radioSendAck(void)
 
     sAckMessage.mChannel = sReceiveFrame.mChannel;
     radioComputeCrc(&sAckMessage, sAckFrame.mLength);
-    radioTransmit(&sAckMessage, &sAckFrame);
+    radioTransmit(&sAckMessage, &sAckFrame, true);
 
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
 exit:
