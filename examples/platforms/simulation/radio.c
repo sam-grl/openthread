@@ -58,11 +58,13 @@ enum
 
 enum
 {
-    SIM_RECEIVE_SENSITIVITY = -100, // dBm
+    SIM_RECEIVE_SENSITIVITY = -100, // dBm, per 802.15.4 O-QPSK 2.4 Ghz requirement.
+	SIM_CCA_ENERGY_DETECT_THRESHOLD = -90, // dBm, per 802.15.4 O-QPSK 2.4 Ghz requirement
+	SIM_TX_POWER = 0, // dBm
 
     SIM_HIGH_RSSI_SAMPLE               = -30, // dBm
     SIM_LOW_RSSI_SAMPLE                = -98, // dBm
-    SIM_HIGH_RSSI_PROB_INC_PER_CHANNEL = 5,
+    SIM_HIGH_RSSI_PROB_INC_PER_CHANNEL = 5, // percent
 };
 
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME
@@ -116,8 +118,8 @@ static otShortAddress sShortAddress;
 static otPanId        sPanid;
 static bool           sPromiscuous = false;
 static bool           sTxWait      = false;
-static int8_t         sTxPower     = 0;
-static int8_t         sCcaEdThresh = -74;
+static int8_t         sTxPower     = SIM_TX_POWER;
+static int8_t         sCcaEdThresh = SIM_CCA_ENERGY_DETECT_THRESHOLD;
 static int8_t         sLnaGain     = 0;
 static uint16_t       sRegionCode  = 0;
 
@@ -769,7 +771,7 @@ void platformRadioTransmitDone(otInstance *aInstance, otError err)
         else
 #endif
         {
-        	// ignore any error in ACK transmit. Frame reception was ok.
+        	// ignore any error in ACK transmit. Frame reception was ok anyway, in case this node sent an ACK.
         	otPlatRadioReceiveDone(aInstance, &sReceiveFrame, OT_ERROR_NONE);
         }
     }
@@ -971,7 +973,7 @@ void radioProcessFrame(otInstance *aInstance)
     sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending = false;
     sReceiveFrame.mInfo.mRxInfo.mAckedWithSecEnhAck    = false;
 
-    otEXPECT_ACTION(sPromiscuous == false, error = OT_ERROR_NOT_CAPABLE); // Promiscuous not yet considered.
+    assert(sPromiscuous == false); // TODO Promiscuous not yet considered.
 
     otEXPECT_ACTION(otMacFrameDoesAddrMatch(&sReceiveFrame, sPanid, sShortAddress, &sExtAddress),
                     error = OT_ERROR_ABORT);
@@ -998,6 +1000,7 @@ exit:
 
 	// if Rx frame needs to be ACKed, postpone the receive-done report until ACK sent, if the frame-rx went ok.
     // TODO consider if this is right. It's done to avoid stack sending new frames in response while the ACK is still pending.
+    // In other words, a successful Rx-frame (err=NONE) that still needs to be ACKed (isAcked) won't yet be reported done.
     if ( error != OT_ERROR_ABORT &&
     	 ( (!isAcked) || (error != OT_ERROR_NONE && isAcked) )  )
     {
