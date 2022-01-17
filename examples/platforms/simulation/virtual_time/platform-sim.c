@@ -110,7 +110,7 @@ static void receiveEvent(otInstance *aInstance)
         break;
 
     case OT_SIM_EVENT_RADIO_FRAME_RX:	// Rx of a radio frame is done. Here's struct RadioMessage.
-        platformRadioReceive(aInstance, event.mData, event.mDataLength, event.mParam);
+        platformRadioReceive(aInstance, event.mData, event.mDataLength, event.mParam1);
         break;
 
     case OT_SIM_EVENT_RADIO_TX_DONE:

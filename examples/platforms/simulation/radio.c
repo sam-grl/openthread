@@ -58,9 +58,9 @@ enum
 
 enum
 {
-    SIM_RECEIVE_SENSITIVITY = -100, // dBm, per 802.15.4 O-QPSK 2.4 Ghz requirement.
-	SIM_CCA_ENERGY_DETECT_THRESHOLD = -90, // dBm, per 802.15.4 O-QPSK 2.4 Ghz requirement
-	SIM_TX_POWER = 0, // dBm
+    SIM_RECEIVE_SENSITIVITY = -85, // dBm, assumption for a not-best-in-class radio.
+    SIM_CCA_ENERGY_DETECT_THRESHOLD = -75, // dBm, initial value, 10 dB over receiver sensitivity.
+    SIM_TX_POWER = 0, // dBm, initial value
 
     SIM_HIGH_RSSI_SAMPLE               = -30, // dBm
     SIM_LOW_RSSI_SAMPLE                = -98, // dBm
@@ -885,9 +885,10 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
     struct Event event;
     event.mDelay      = 1; // 1us - minimal delay just to let the transmitted frame arrive in the simulated radio chip.
     event.mEvent      = isAck ? OT_SIM_EVENT_RADIO_FRAME_TX_ACK : OT_SIM_EVENT_RADIO_FRAME_TX;
-    // event mParam contains the TxPower used.
+    // event.mParam1 contains the TxPower used. event.mParam2 the CCA ED threshold.
     int8_t maxPower   = sChannelMaxTransmitPower[sCurrentChannel - kMinChannel];
-    event.mParam	  = sTxPower < maxPower ? sTxPower : maxPower;
+    event.mParam1	  = sTxPower < maxPower ? sTxPower : maxPower;
+    event.mParam2     = sCcaEdThresh;
     event.mDataLength = offsetof(struct RadioMessage, mPsdu) + aFrame->mLength; // RadioMessage includes metadata and the PDSU (frame)
     memcpy(event.mData, aMessage, event.mDataLength);
 

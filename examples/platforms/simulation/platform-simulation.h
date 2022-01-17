@@ -67,9 +67,9 @@ enum
     OT_SIM_EVENT_UART_WRITE         = 2,
     OT_SIM_EVENT_RADIO_SPINEL_WRITE = 3,
     OT_SIM_EVENT_OTNS_STATUS_PUSH   = 5,
-	OT_SIM_EVENT_RADIO_TX_DONE      = 6,
-	OT_SIM_EVENT_RADIO_FRAME_TX     = 8,
-	OT_SIM_EVENT_RADIO_FRAME_TX_ACK = 9,
+    OT_SIM_EVENT_RADIO_TX_DONE      = 6,
+    OT_SIM_EVENT_RADIO_FRAME_TX     = 8,
+    OT_SIM_EVENT_RADIO_FRAME_TX_ACK = 9,
     OT_EVENT_DATA_MAX_SIZE          = 1024,
 };
 
@@ -78,7 +78,8 @@ struct Event
 {
     uint64_t mDelay;
     uint8_t  mEvent;       // contains one of OT_SIM_EVENT_* event types
-    int8_t   mParam;       // generic parameter used by some event types
+    int8_t   mParam1;       // generic parameter 1 used by some event types, (TxPower, RSSI)
+    int8_t   mParam2;       // generic parameter 2 used by some event types, (CCA ED)
     uint16_t mDataLength;
     uint8_t  mData[OT_EVENT_DATA_MAX_SIZE];
 } OT_TOOL_PACKED_END;
