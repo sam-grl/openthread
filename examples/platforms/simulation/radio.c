@@ -58,9 +58,9 @@ enum
 
 enum
 {
-    SIM_RECEIVE_SENSITIVITY = -85, // dBm, assumption for a not-best-in-class radio.
-    SIM_CCA_ENERGY_DETECT_THRESHOLD = -75, // dBm, initial value, 10 dB over receiver sensitivity.
-    SIM_TX_POWER = 0, // dBm, initial value
+    SIM_RECEIVE_SENSITIVITY = -100, // dBm, fixed at compile time
+    SIM_CCA_ENERGY_DETECT_THRESHOLD = -75, // dBm, may be changed during operation.
+    SIM_TX_POWER = 0, // dBm, initial value, may be changed during operation.
 
     SIM_HIGH_RSSI_SAMPLE               = -30, // dBm
     SIM_LOW_RSSI_SAMPLE                = -98, // dBm
@@ -501,8 +501,8 @@ int8_t otPlatRadioGetRssi(otInstance *aInstance)
     assert(aInstance != NULL);
 
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME
+    assert(sReceiveFrame.mInfo.mRxInfo.mRssi >= SIM_RECEIVE_SENSITIVITY);
     return sReceiveFrame.mInfo.mRxInfo.mRssi;
-
 #else
     int8_t rssi = SIM_LOW_RSSI_SAMPLE;
     uint8_t  channel = sReceiveFrame.mChannel;
