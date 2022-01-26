@@ -60,8 +60,8 @@ enum
 {
     SIM_RECEIVE_SENSITIVITY = -100, // dBm
 
-    SIM_HIGH_RSSI_SAMPLE               = -30, // dBm
-    SIM_LOW_RSSI_SAMPLE                = -98, // dBm
+    SIM_HIGH_RSSI_SAMPLE               = -92, // dBm
+    SIM_LOW_RSSI_SAMPLE                = -92, // dBm
     SIM_HIGH_RSSI_PROB_INC_PER_CHANNEL = 5,
 };
 
@@ -924,7 +924,7 @@ void radioProcessFrame(otInstance *aInstance)
     otMacAddress macAddress;
     OT_UNUSED_VARIABLE(macAddress);
 
-    sReceiveFrame.mInfo.mRxInfo.mRssi = -20;
+    sReceiveFrame.mInfo.mRxInfo.mRssi = SIM_HIGH_RSSI_SAMPLE;
     sReceiveFrame.mInfo.mRxInfo.mLqi  = OT_RADIO_LQI_NONE;
 
     sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending = false;
