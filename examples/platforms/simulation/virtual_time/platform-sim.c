@@ -72,6 +72,10 @@ static void handleSignal(int aSignal)
 
 void otSimSendEvent(const struct Event *aEvent)
 {
+	if(aEvent->mEvent != OT_SIM_EVENT_UART_WRITE)
+		return;
+
+    fprintf(stderr, "SENDING FROM OT!!!!!\n");
     ssize_t            rval;
     struct sockaddr_in sockaddr;
 
@@ -80,7 +84,16 @@ void otSimSendEvent(const struct Event *aEvent)
     inet_pton(AF_INET, "127.0.0.1", &sockaddr.sin_addr);
     sockaddr.sin_port = htons(9000 + sPortOffset);
 
-    rval = sendto(sSockFd, aEvent, offsetof(struct Event, mData) + aEvent->mDataLength, 0, (struct sockaddr *)&sockaddr,
+    struct Event myEvent;
+    myEvent.mDelay = aEvent->mDelay;
+    myEvent.mNodeId = gNodeId;
+    myEvent.mEvent = aEvent->mEvent;
+    myEvent.mParam1 = aEvent->mParam1;
+    myEvent.mParam2 = aEvent->mParam2;
+    myEvent.mDataLength = aEvent->mDataLength;
+    memcpy(myEvent.mData, aEvent->mData, aEvent->mDataLength);
+
+    rval = sendto(sSockFd, &myEvent, offsetof(struct Event, mData) + aEvent->mDataLength, 0, (struct sockaddr *)&sockaddr,
                   sizeof(sockaddr));
 
     if (rval < 0)
@@ -88,6 +101,7 @@ void otSimSendEvent(const struct Event *aEvent)
         perror("sendto");
         exit(EXIT_FAILURE);
     }
+    fprintf(stderr, "Sent successfully!\n");
 }
 
 static void receiveEvent(otInstance *aInstance)
@@ -101,19 +115,36 @@ static void receiveEvent(otInstance *aInstance)
         exit(EXIT_FAILURE);
     }
 
+    fprintf(stderr, "RECEIVED EVENT!!\n");
+    fprintf(stderr, "event.mDelay: %ld\n", event.mDelay);
+    fprintf(stderr, "event.mNodeId: %d\n", event.mNodeId);
+    fprintf(stderr, "event.mEvent: %d\n", event.mEvent);
+    fprintf(stderr, "event.mParam1: %d\n", event.mParam1);
+    fprintf(stderr, "event.mParam2: %d\n", event.mParam2);
+    fprintf(stderr, "event.mDataLength: %d\n", event.mDataLength);
+    fprintf(stderr, "event.mData: 0x");
+    for(uint8_t i = 0; i < event.mDataLength; i++)
+    {
+    	fprintf(stderr, "%x", event.mData[i]);
+    }
+    fprintf(stderr, "\n");
+
     platformAlarmAdvanceNow(event.mDelay);
 
     switch (event.mEvent)
     {
     case OT_SIM_EVENT_ALARM_FIRED:
+    	fprintf(stderr, "OT_SIM_EVENT_ALARM_FIRED\n");
     	// Nothing to do. Alarm event is only used to advance time (see above).
         break;
 
     case OT_SIM_EVENT_RADIO_FRAME_RX:	// Rx of a radio frame is done. Here's struct RadioMessage.
+    	fprintf(stderr, "OT_SIM_EVENT_RADIO_FRAME_RX\n");
         platformRadioReceive(aInstance, event.mData, event.mDataLength, event.mParam1);
         break;
 
     case OT_SIM_EVENT_RADIO_TX_DONE:
+    	fprintf(stderr, "OT_SIM_EVENT_RADIO_TX_DONE\n");
     	assert(event.mDataLength>=1);
     	// the external simulator process will determine success or error of Tx, and report to here.
     	otError err = (otError) event.mData[0];
@@ -121,10 +152,15 @@ static void receiveEvent(otInstance *aInstance)
         break;
 
     case OT_SIM_EVENT_UART_WRITE:
-        otPlatUartReceived(event.mData, event.mDataLength);
+    	fprintf(stderr, "OT_SIM_EVENT_UART_WRITE event received on node: %d\n", gNodeId);
+    	//Just for testing purposes: send the same event back, but everything set to 0xaa
+    	otSimSendEvent(&event);
+
+//        otPlatUartReceived(event.mData, event.mDataLength);
         break;
 
     default:
+    	fprintf(stderr, "OT_SIM_EVENT_UART_WRITE\n");
         assert(false);
     }
 }
@@ -297,9 +333,12 @@ void otSysProcessDrivers(otInstance *aInstance)
 
     if (!otTaskletsArePending(aInstance) && platformAlarmGetNext() > 0 && !platformRadioIsTransmitPending())
     {
+    	fprintf(stderr, "TEST\n");
         platformSendSleepEvent();
 
+        fprintf(stderr, "TEST2\n");
         rval = select(max_fd + 1, &read_fds, &write_fds, &error_fds, NULL);
+        fprintf(stderr, "TEST3\n");
 
         if ((rval < 0) && (errno != EINTR))
         {

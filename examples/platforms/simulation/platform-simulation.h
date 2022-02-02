@@ -77,6 +77,7 @@ OT_TOOL_PACKED_BEGIN
 struct Event
 {
     uint64_t mDelay;
+    uint32_t mNodeId;
     uint8_t  mEvent;       // contains one of OT_SIM_EVENT_* event types
     int8_t   mParam1;       // generic parameter 1 used by some event types, (TxPower, RSSI)
     int8_t   mParam2;       // generic parameter 2 used by some event types, (CCA ED)
