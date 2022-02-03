@@ -381,6 +381,7 @@ void platformRadioInit(void)
     {
         sChannelMaxTransmitPower[i] = OT_RADIO_POWER_INVALID;
     }
+    sReceiveFrame.mInfo.mRxInfo.mRssi = OT_RADIO_RSSI_INVALID;
 
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
     otLinkMetricsInit(SIM_RECEIVE_SENSITIVITY);
