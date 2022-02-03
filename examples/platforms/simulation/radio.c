@@ -885,6 +885,9 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
 #else  // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
     struct Event event;
     event.mDelay      = 1; // 1us - minimal delay just to let the transmitted frame arrive in the simulated radio chip.
+#if OPENTHREAD_CONFIG_WHITEFIELD_ENABLE
+    event.mNodeId     = gNodeId;
+#endif
     event.mEvent      = isAck ? OT_SIM_EVENT_RADIO_FRAME_TX_ACK : OT_SIM_EVENT_RADIO_FRAME_TX;
     // event.mParam1 contains the TxPower used. event.mParam2 the CCA ED threshold.
     int8_t maxPower   = sChannelMaxTransmitPower[sCurrentChannel - kMinChannel];
