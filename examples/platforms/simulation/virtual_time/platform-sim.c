@@ -135,9 +135,7 @@ static void platformSendSleepEvent(void)
 
     assert(platformAlarmGetNext() > 0);
     event.mDelay      = platformAlarmGetNext();
-#if OPENTHREAD_CONFIG_WHITEFIELD_ENABLE
     event.mNodeId     = gNodeId;
-#endif
     event.mEvent      = OT_SIM_EVENT_ALARM_FIRED;
     event.mDataLength = 0;
 
@@ -165,9 +163,7 @@ otError otPlatUartSend(const uint8_t *aData, uint16_t aLength)
     struct Event event;
 
     event.mDelay      = 0;
-#if OPENTHREAD_CONFIG_WHITEFIELD_ENABLE
     event.mNodeId     = gNodeId;
-#endif
     event.mEvent      = OT_SIM_EVENT_UART_WRITE;
     event.mDataLength = aLength;
 
@@ -338,9 +334,7 @@ void otPlatOtnsStatus(const char *aStatus)
     memcpy(event.mData, aStatus, statusLength);
     event.mDataLength = statusLength;
     event.mDelay      = 0;
-#if OPENTHREAD_CONFIG_WHITEFIELD_ENABLE
     event.mNodeId     = gNodeId;
-#endif
     event.mEvent      = OT_SIM_EVENT_OTNS_STATUS_PUSH;
 
     otSimSendEvent(&event);
