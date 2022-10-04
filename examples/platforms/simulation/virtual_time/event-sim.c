@@ -52,14 +52,56 @@ void otSimSendSleepEvent(void)
     otSimSendEvent(&event);
 }
 
-void otSimSendRadioTxEvent(struct Event *aEvent, struct TxEventData *aTxEventData, const uint8_t *aPayload, size_t aLenPayload) {
-
-    aEvent->mEvent = OT_SIM_EVENT_RADIO_TX;
+void otSimSendRadioTxEvent(struct Event *aEvent, struct TxEventData *aTxEventData, const uint8_t *aPayload, size_t aLenPayload)
+{
+    aEvent->mEvent = OT_SIM_EVENT_RADIO_COMM_TX;
     memcpy(aEvent->mData, aTxEventData, sizeof(struct TxEventData));
     memcpy(aEvent->mData + sizeof(struct TxEventData), aPayload, aLenPayload);
     aEvent->mDataLength = sizeof(struct TxEventData) + aLenPayload;
 
     otSimSendEvent(aEvent);
+}
+
+void otSimSendRadioChannelSampleEvent(struct Event *aEvent, struct ChanSampleEventData *aChanData)
+{
+    aEvent->mEvent = OT_SIM_EVENT_RADIO_CHAN_SAMPLE;
+    memcpy(aEvent->mData, aChanData, sizeof(struct ChanSampleEventData));
+    aEvent->mDataLength = sizeof(struct ChanSampleEventData);
+
+    otSimSendEvent(aEvent);
+}
+
+void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData)
+{
+    struct Event event;
+    event.mEvent = OT_SIM_EVENT_RADIO_STATE;
+    event.mDelay = 0;
+    memcpy(&event.mData, aStateData, sizeof(struct RadioStateEventData));
+    event.mDataLength = sizeof(struct RadioStateEventData);
+
+    otSimSendEvent(&event);
+}
+
+void otSimSendUartWriteEvent(const uint8_t *aData, uint16_t aLength) {
+    struct Event event;
+
+    event.mEvent      = OT_SIM_EVENT_UART_WRITE;
+    event.mDelay      = 0;
+    event.mDataLength = aLength;
+    memcpy(event.mData, aData, aLength);
+
+    otSimSendEvent(&event);
+}
+
+void otSimSendOtnsStatusPushEvent(const char *aStatus, uint16_t aLength) {
+    struct Event event;
+
+    memcpy(event.mData, aStatus, aLength);
+    event.mEvent      = OT_SIM_EVENT_OTNS_STATUS_PUSH;
+    event.mDelay      = 0;
+    event.mDataLength = aLength;
+
+    otSimSendEvent(&event);
 }
 
 void otSimSendEvent(struct Event *aEvent)

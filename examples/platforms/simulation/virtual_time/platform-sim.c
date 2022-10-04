@@ -50,7 +50,7 @@
 #include <openthread/platform/radio.h>
 
 #include "utils/uart.h"
-#include "core/common/debug.hpp"
+//#include "core/common/debug.hpp"
 
 uint32_t gNodeId        = 1;
 uint64_t gLastAlarmEventId = 0;
@@ -72,7 +72,7 @@ static void handleSignal(int aSignal)
     gTerminate = true;
 }
 
-#define VERIFY_EVENT_SIZE(X) OT_ASSERT((uint16_t)rval >= (sizeof(X) + offsetof(struct Event, mData)) && "event payload smaller than: " && sizeof(X) );
+#define VERIFY_EVENT_SIZE(X) assert((uint16_t)rval >= (sizeof(X) + offsetof(struct Event, mData)) && "event payload smaller than: " && sizeof(X) );
 static void receiveEvent(otInstance *aInstance)
 {
     struct Event event;
@@ -101,11 +101,7 @@ static void receiveEvent(otInstance *aInstance)
         otPlatUartReceived(event.mData, event.mDataLength);
         break;
 
-    case OT_SIM_EVENT_RADIO_RECEIVED:
-        platformRadioReceive(aInstance, event.mData, event.mDataLength, NULL);
-        break;
-
-    case OT_SIM_EVENT_RADIO_RX:
+    case OT_SIM_EVENT_RADIO_COMM_RX:
         VERIFY_EVENT_SIZE(struct RxEventData)
         const size_t sz = sizeof(struct RxEventData);
         platformRadioReceive(aInstance, evData + sz,
@@ -114,11 +110,15 @@ static void receiveEvent(otInstance *aInstance)
 
     case OT_SIM_EVENT_RADIO_TX_DONE:
         VERIFY_EVENT_SIZE(struct TxDoneEventData)
-        platformRadioTransmitDone(aInstance, (struct TxDoneEventData *)evData);
+        platformRadioTxDone(aInstance, (struct TxDoneEventData *)evData);
+        break;
+
+    case OT_SIM_EVENT_CHAN_SAMPLE_DONE:
+        // FIXME xyz
         break;
 
     default:
-        OT_ASSERT(false && "Unrecognized event type received");
+        assert(false && "Unrecognized event type received");
     }
 }
 
@@ -139,18 +139,10 @@ otError otPlatUartDisable(void)
 
 otError otPlatUartSend(const uint8_t *aData, uint16_t aLength)
 {
-    otError      error = OT_ERROR_NONE;
-    struct Event event;
-
-    event.mDelay      = 0;
-    event.mEvent      = OT_SIM_EVENT_UART_WRITE;
-    event.mDataLength = aLength;
-    memcpy(event.mData, aData, aLength);
-
-    otSimSendEvent(&event);
+    otSimSendUartWriteEvent(aData, aLength);
     otPlatUartSendDone();
 
-    return error;
+    return OT_ERROR_NONE;
 }
 
 otError otPlatUartFlush(void)
@@ -275,7 +267,8 @@ void otSysProcessDrivers(otInstance *aInstance)
     platformUartUpdateFdSet(&read_fds, &write_fds, &error_fds, &max_fd);
 #endif
 
-    if (!otTaskletsArePending(aInstance) && platformAlarmGetNext() > 0 && !platformRadioIsTransmitPending())
+    if (!otTaskletsArePending(aInstance) && platformAlarmGetNext() > 0 &&
+        (!platformRadioIsTransmitPending() || platformRadioIsBusy()) )
     {
         otSimSendSleepEvent();
 
@@ -304,19 +297,12 @@ void otSysProcessDrivers(otInstance *aInstance)
 
 void otPlatOtnsStatus(const char *aStatus)
 {
-    struct Event event;
     uint16_t     statusLength = (uint16_t)strlen(aStatus);
-    if (statusLength > sizeof(event.mData)){
-        statusLength = sizeof(event.mData);
-        assert(statusLength <= sizeof (event.mData));
+    if (statusLength > OT_EVENT_DATA_MAX_SIZE){
+        statusLength = OT_EVENT_DATA_MAX_SIZE;
+        assert(statusLength <= OT_EVENT_DATA_MAX_SIZE);
     }
-
-    memcpy(event.mData, aStatus, statusLength);
-    event.mDataLength = statusLength;
-    event.mDelay      = 0;
-    event.mEvent      = OT_SIM_EVENT_OTNS_STATUS_PUSH;
-
-    otSimSendEvent(&event);
+    otSimSendOtnsStatusPushEvent(aStatus, statusLength);
 }
 
 #endif // OPENTHREAD_CONFIG_OTNS_ENABLE

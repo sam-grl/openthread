@@ -70,11 +70,12 @@ enum
     //OT_SIM_EVENT_RADIO_SPINEL_WRITE  = 3,
     //OT_SIM_EVENT_POSTCMD             = 4,
     OT_SIM_EVENT_OTNS_STATUS_PUSH    = 5,
-
-    // Additional events for V2 method of simulation (16-47)
-    OT_SIM_EVENT_RADIO_RX            = 16,
-    OT_SIM_EVENT_RADIO_TX            = 17,
-    OT_SIM_EVENT_RADIO_TX_DONE       = 18,
+    OT_SIM_EVENT_RADIO_COMM_RX       = 6,
+    OT_SIM_EVENT_RADIO_TX_DONE       = 7,
+    OT_SIM_EVENT_RADIO_CHAN_SAMPLE   = 8,
+    OT_SIM_EVENT_CHAN_SAMPLE_DONE    = 9,
+    OT_SIM_EVENT_RADIO_COMM_TX       = 10,
+    OT_SIM_EVENT_RADIO_STATE         = 11,
 
     OT_EVENT_DATA_MAX_SIZE = 1024,
 };
@@ -93,7 +94,6 @@ struct TxEventData
 {
     uint8_t  mChannel;
     int8_t   mTxPower;    // Tx-power (dBm) for a radio frame
-    int8_t   mCcaEdTresh; // CCA Energy Detect threshold (dBm) used by transmitter
 } OT_TOOL_PACKED_END;
 
 OT_TOOL_PACKED_BEGIN
@@ -109,6 +109,26 @@ struct TxDoneEventData
 {
     uint8_t  mChannel;
     uint8_t  mError;      // status code result of radio operation
+} OT_TOOL_PACKED_END;
+
+OT_TOOL_PACKED_BEGIN
+struct ChanSampleEventData
+{
+    uint8_t  mChannel;
+} OT_TOOL_PACKED_END;
+
+OT_TOOL_PACKED_BEGIN
+struct ChanSampleDoneEventData
+{
+    uint8_t  mChannel;
+    int8_t   mRssi;
+} OT_TOOL_PACKED_END;
+
+OT_TOOL_PACKED_BEGIN
+struct RadioStateEventData
+{
+    uint8_t  mChannel;
+    uint8_t  mState;
 } OT_TOOL_PACKED_END;
 
 /**
@@ -198,7 +218,7 @@ void platformRadioReceive(otInstance *aInstance, const uint8_t *aBuf, uint16_t a
  * @param[in]  aTxDoneParams A pointer to status parameters for the attempt to transmit the virtual radio frame.
  *
  */
-void platformRadioTransmitDone(otInstance *aInstance, struct TxDoneEventData *aTxDoneParams);
+void platformRadioTxDone(otInstance *aInstance, struct TxDoneEventData *aTxDoneParams);
 
 /**
  * This function updates the file descriptor sets with file descriptors used by the radio driver.
@@ -276,7 +296,14 @@ void otSimSendSleepEvent(void);
 void otSimSendRadioTxEvent(struct Event *aEvent, struct TxEventData *aTxEventData,  const uint8_t *aPayload, size_t aLenPayload);
 
 /**
- * This function sends Uart data through simulation.
+ * This function sends a Radio State simulation event to the simulator.
+ *
+ * @param[in]       aStateData A pointer to specific data for Radio State event.
+ */
+void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData);
+
+/**
+ * This function sends a Uart data event to the simulator.
  *
  * @param[in]   aData       A pointer to the UART data.
  * @param[in]   aLength     Length of UART data.
@@ -285,12 +312,31 @@ void otSimSendRadioTxEvent(struct Event *aEvent, struct TxEventData *aTxEventDat
 void otSimSendUartWriteEvent(const uint8_t *aData, uint16_t aLength);
 
 /**
- * This function checks if radio transmitting is pending.
+ * This function sends status push data event to the OT-NS simulator.
  *
- * @returns Whether radio transmitting is pending.
+ * @param[in]   aStatus     A pointer to the status string data.
+ * @param[in]   aLength     Length of status string data.
+ *
+ */
+void otSimSendOtnsStatusPushEvent(const char *aStatus, uint16_t aLength);
+
+/**
+ * This function checks if radio needs to transmit a pending MAC (data) frame.
+ *
+ * @returns Whether radio frame Tx is pending (true) or not (false).
  *
  */
 bool platformRadioIsTransmitPending(void);
+
+/**
+ * This function checks if the radio is busy performing some task such as transmission,
+ * actively receiving a frame, returning an ACK, or doing a CCA. Idle listening (Rx) does
+ * not count as busy.
+ *
+ * @returns Whether radio is busy with a task.
+ *
+ */
+bool platformRadioIsBusy(void);
 
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
 
