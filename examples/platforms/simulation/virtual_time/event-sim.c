@@ -34,6 +34,7 @@
 
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME
 
+#include "event-sim.h"
 #include "platform-simulation.h"
 
 extern uint16_t sPortOffset;
@@ -46,14 +47,15 @@ void otSimSendSleepEvent(void)
 
     event.mDelay      = platformAlarmGetNext();
     event.mEvent      = OT_SIM_EVENT_ALARM_FIRED;
-    event.mDataLength = 8;
-    memcpy(&event.mData, &gLastAlarmEventId, 8);
+    event.mDataLength = sizeof(uint64_t);
+    memcpy(&event.mData, &gLastAlarmEventId, sizeof(uint64_t));
 
     otSimSendEvent(&event);
 }
 
 void otSimSendRadioTxEvent(struct Event *aEvent, struct TxEventData *aTxEventData, const uint8_t *aPayload, size_t aLenPayload)
 {
+    assert(aLenPayload <= OT_EVENT_DATA_MAX_SIZE);
     aEvent->mEvent = OT_SIM_EVENT_RADIO_COMM_TX;
     memcpy(aEvent->mData, aTxEventData, sizeof(struct TxEventData));
     memcpy(aEvent->mData + sizeof(struct TxEventData), aPayload, aLenPayload);
@@ -62,13 +64,15 @@ void otSimSendRadioTxEvent(struct Event *aEvent, struct TxEventData *aTxEventDat
     otSimSendEvent(aEvent);
 }
 
-void otSimSendRadioChannelSampleEvent(struct Event *aEvent, struct ChanSampleEventData *aChanData)
+void otSimSendRadioChanSampleEvent(uint64_t aSampleDuration, struct ChanSampleEventData *aChanData)
 {
-    aEvent->mEvent = OT_SIM_EVENT_RADIO_CHAN_SAMPLE;
-    memcpy(aEvent->mData, aChanData, sizeof(struct ChanSampleEventData));
-    aEvent->mDataLength = sizeof(struct ChanSampleEventData);
+    struct Event event;
+    event.mEvent = OT_SIM_EVENT_RADIO_CHAN_SAMPLE;
+    event.mDelay = aSampleDuration;
+    memcpy(event.mData, aChanData, sizeof(struct ChanSampleEventData));
+    event.mDataLength = sizeof(struct ChanSampleEventData);
 
-    otSimSendEvent(aEvent);
+    otSimSendEvent(&event);
 }
 
 void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData)
@@ -83,6 +87,7 @@ void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData)
 }
 
 void otSimSendUartWriteEvent(const uint8_t *aData, uint16_t aLength) {
+    assert(aLength <= OT_EVENT_DATA_MAX_SIZE);
     struct Event event;
 
     event.mEvent      = OT_SIM_EVENT_UART_WRITE;
@@ -94,6 +99,7 @@ void otSimSendUartWriteEvent(const uint8_t *aData, uint16_t aLength) {
 }
 
 void otSimSendOtnsStatusPushEvent(const char *aStatus, uint16_t aLength) {
+    assert(aLength <= OT_EVENT_DATA_MAX_SIZE);
     struct Event event;
 
     memcpy(event.mData, aStatus, aLength);

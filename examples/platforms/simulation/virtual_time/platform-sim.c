@@ -36,6 +36,8 @@
 
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME
 
+#include "event-sim.h"
+
 #include <assert.h>
 #include <errno.h>
 #include <libgen.h>
@@ -114,7 +116,9 @@ static void receiveEvent(otInstance *aInstance)
         break;
 
     case OT_SIM_EVENT_CHAN_SAMPLE_DONE:
-        // FIXME xyz
+        VERIFY_EVENT_SIZE(struct ChanSampleDoneEventData)
+        // TODO consider also energy-detect case. This only does CCA now.
+        platformRadioCcaDone(aInstance, (struct ChanSampleDoneEventData *)evData);
         break;
 
     default:

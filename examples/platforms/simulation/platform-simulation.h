@@ -63,9 +63,8 @@
 
 enum
 {
-    // Events for V1 method of simulation (0-15)
     OT_SIM_EVENT_ALARM_FIRED         = 0,
-    OT_SIM_EVENT_RADIO_RECEIVED      = 1,
+    //OT_SIM_EVENT_RADIO_RECEIVED      = 1,
     OT_SIM_EVENT_UART_WRITE          = 2,
     //OT_SIM_EVENT_RADIO_SPINEL_WRITE  = 3,
     //OT_SIM_EVENT_POSTCMD             = 4,
@@ -129,6 +128,7 @@ struct RadioStateEventData
 {
     uint8_t  mChannel;
     uint8_t  mState;
+    int8_t   mTxPower;  // only used for mState == OT_RADIO_STATE_TRANSMIT
 } OT_TOOL_PACKED_END;
 
 /**
@@ -188,6 +188,8 @@ uint64_t platformAlarmGetNow(void);
  */
 void platformAlarmAdvanceNow(uint64_t aDelta);
 
+void platformAlarmMicroSetRadioEvent(uint64_t aTimeUs);
+
 /**
  * This function initializes the radio service used by OpenThread.
  *
@@ -219,6 +221,8 @@ void platformRadioReceive(otInstance *aInstance, const uint8_t *aBuf, uint16_t a
  *
  */
 void platformRadioTxDone(otInstance *aInstance, struct TxDoneEventData *aTxDoneParams);
+
+void platformRadioCcaDone(otInstance *aInstance, struct ChanSampleDoneEventData *aChanData);
 
 /**
  * This function updates the file descriptor sets with file descriptors used by the radio driver.
@@ -268,57 +272,6 @@ void platformUartProcess(void);
  *
  */
 void platformUartRestore(void);
-
-/**
- * This function sends a generic simulation event to the simulator. Event fields are
- * updated to the values as were used for sending it.
- *
- * @param[in,out]   aEvent  A pointer to the simulation event to send.
- *
- */
-void otSimSendEvent(struct Event *aEvent);
-
-/**
- * This function sends a sleep event to the simulator. The amount of time to sleep
- * for this node is determined by the alarm timer, by calling platformAlarmGetNext().
- */
-void otSimSendSleepEvent(void);
-
-/**
- * This function sends a Radio Tx simulation event to the simulator. aEvent fields are
-* updated to the values as were used for sending it.
- *
- * @param[in,out]   aEvent       A pointer to the simulation event to send.
- * @param[in]       aTxEventData A pointer to specific data for Radio Tx event.
- * @param[in]       aPayload     A pointer to the data payload (radio frame) to send.
- * @param[in]       aLenPayload  Length of aPayload data.
- */
-void otSimSendRadioTxEvent(struct Event *aEvent, struct TxEventData *aTxEventData,  const uint8_t *aPayload, size_t aLenPayload);
-
-/**
- * This function sends a Radio State simulation event to the simulator.
- *
- * @param[in]       aStateData A pointer to specific data for Radio State event.
- */
-void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData);
-
-/**
- * This function sends a Uart data event to the simulator.
- *
- * @param[in]   aData       A pointer to the UART data.
- * @param[in]   aLength     Length of UART data.
- *
- */
-void otSimSendUartWriteEvent(const uint8_t *aData, uint16_t aLength);
-
-/**
- * This function sends status push data event to the OT-NS simulator.
- *
- * @param[in]   aStatus     A pointer to the status string data.
- * @param[in]   aLength     Length of status string data.
- *
- */
-void otSimSendOtnsStatusPushEvent(const char *aStatus, uint16_t aLength);
 
 /**
  * This function checks if radio needs to transmit a pending MAC (data) frame.
