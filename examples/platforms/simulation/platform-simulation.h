@@ -69,15 +69,29 @@ enum
     //OT_SIM_EVENT_RADIO_SPINEL_WRITE  = 3,
     //OT_SIM_EVENT_POSTCMD             = 4,
     OT_SIM_EVENT_OTNS_STATUS_PUSH    = 5,
-    OT_SIM_EVENT_RADIO_COMM_RX       = 6,
+    OT_SIM_EVENT_RADIO_COMM          = 6,
     OT_SIM_EVENT_RADIO_TX_DONE       = 7,
     OT_SIM_EVENT_RADIO_CHAN_SAMPLE   = 8,
-    OT_SIM_EVENT_CHAN_SAMPLE_DONE    = 9,
-    OT_SIM_EVENT_RADIO_COMM_TX       = 10,
-    OT_SIM_EVENT_RADIO_STATE         = 11,
+    OT_SIM_EVENT_RADIO_STATE         = 9,
+    OT_SIM_EVENT_RADIO_RX_DONE       = 10,
 
     OT_EVENT_DATA_MAX_SIZE = 1024,
 };
+
+/**
+ * The sub-states of the simulated radio while it is in Tx or Rx state.
+ */
+typedef enum
+{
+    OT_RADIO_SUBSTATE_READY,
+    OT_RADIO_SUBSTATE_ONGOING_FRAME,
+    OT_RADIO_SUBSTATE_IFS_WAIT,
+    OT_RADIO_SUBSTATE_ONGOING_ACK,
+    OT_RADIO_SUBSTATE_CCA,
+    OT_RADIO_SUBSTATE_CCA_TO_TX,
+    OT_RADIO_SUBSTATE_TURNAROUND_TX_RX,
+    OT_RADIO_SUBSTATE_ENERGY_SCAN,
+} RadioSubState;
 
 OT_TOOL_PACKED_BEGIN
 struct Event
@@ -89,46 +103,20 @@ struct Event
 } OT_TOOL_PACKED_END;
 
 OT_TOOL_PACKED_BEGIN
-struct TxEventData
+struct RadioCommEventData
 {
     uint8_t  mChannel;
-    int8_t   mTxPower;    // Tx-power (dBm) for a radio frame
-} OT_TOOL_PACKED_END;
-
-OT_TOOL_PACKED_BEGIN
-struct RxEventData
-{
-    uint8_t  mChannel;
+    int8_t   mPower;      // power value (dBm), RSSI or Tx-power
     uint8_t  mError;      // status code result of radio operation
-    int8_t   mRssi;       // RSSI value (dBm) for a received radio frame
-} OT_TOOL_PACKED_END;
-
-OT_TOOL_PACKED_BEGIN
-struct TxDoneEventData
-{
-    uint8_t  mChannel;
-    uint8_t  mError;      // status code result of radio operation
-} OT_TOOL_PACKED_END;
-
-OT_TOOL_PACKED_BEGIN
-struct ChanSampleEventData
-{
-    uint8_t  mChannel;
-} OT_TOOL_PACKED_END;
-
-OT_TOOL_PACKED_BEGIN
-struct ChanSampleDoneEventData
-{
-    uint8_t  mChannel;
-    int8_t   mRssi;
+    uint64_t mDuration;   // us
 } OT_TOOL_PACKED_END;
 
 OT_TOOL_PACKED_BEGIN
 struct RadioStateEventData
 {
     uint8_t  mChannel;
+    int8_t   mTxPower;  // only used when mState == OT_RADIO_STATE_TRANSMIT
     uint8_t  mState;
-    int8_t   mTxPower;  // only used for mState == OT_RADIO_STATE_TRANSMIT
 } OT_TOOL_PACKED_END;
 
 /**
@@ -189,6 +177,7 @@ uint64_t platformAlarmGetNow(void);
 void platformAlarmAdvanceNow(uint64_t aDelta);
 
 void platformAlarmMicroSetRadioEvent(uint64_t aTimeUs);
+uint64_t platformAlarmMicroGetRadioEvent(void);
 
 /**
  * This function initializes the radio service used by OpenThread.
@@ -203,15 +192,24 @@ void platformRadioInit(void);
 void platformRadioDeinit(void);
 
 /**
- * This function inputs a received radio frame.
+ * This function signals the start of a received radio frame.
+ *
+ * @param[in]  aInstance   A pointer to the OpenThread instance.
+ * @param[in]  aRxParams   A pointer to parameters related to the reception event.
+ *
+ */
+void platformRadioRxStart(otInstance *aInstance, struct RadioCommEventData *aRxParams);
+
+/**
+ * This function signals the end of a received radio frame and inputs the frame data.
  *
  * @param[in]  aInstance   A pointer to the OpenThread instance.
  * @param[in]  aBuf        A pointer to the received radio frame (struct RadioMessage).
  * @param[in]  aBufLength  The size of the received radio frame (struct RadioMessage).
- * @param[in]  aRxParams   Optional pointer to parameters related to the reception event, or NULL if none were given.
+ * @param[in]  aRxParams   A pointer to parameters related to the reception event.
  *
  */
-void platformRadioReceive(otInstance *aInstance, const uint8_t *aBuf, uint16_t aBufLength, struct RxEventData *aRxParams);
+void platformRadioRxDone(otInstance *aInstance, const uint8_t *aBuf, uint16_t aBufLength, struct RadioCommEventData *aRxParams);
 
 /**
  * This function signals that virtual radio is done transmitting a single frame.
@@ -220,9 +218,9 @@ void platformRadioReceive(otInstance *aInstance, const uint8_t *aBuf, uint16_t a
  * @param[in]  aTxDoneParams A pointer to status parameters for the attempt to transmit the virtual radio frame.
  *
  */
-void platformRadioTxDone(otInstance *aInstance, struct TxDoneEventData *aTxDoneParams);
+void platformRadioTxDone(otInstance *aInstance, struct RadioCommEventData *aTxDoneParams);
 
-void platformRadioCcaDone(otInstance *aInstance, struct ChanSampleDoneEventData *aChanData);
+void platformRadioCcaDone(otInstance *aInstance, struct RadioCommEventData *aChanData);
 
 /**
  * This function updates the file descriptor sets with file descriptors used by the radio driver.

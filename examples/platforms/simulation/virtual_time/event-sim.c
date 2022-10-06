@@ -48,29 +48,30 @@ void otSimSendSleepEvent(void)
     event.mDelay      = platformAlarmGetNext();
     event.mEvent      = OT_SIM_EVENT_ALARM_FIRED;
     event.mDataLength = sizeof(uint64_t);
-    memcpy(&event.mData, &gLastAlarmEventId, sizeof(uint64_t));
+    memcpy(event.mData, &gLastAlarmEventId, sizeof(uint64_t));
 
     otSimSendEvent(&event);
 }
 
-void otSimSendRadioTxEvent(struct Event *aEvent, struct TxEventData *aTxEventData, const uint8_t *aPayload, size_t aLenPayload)
+void otSimSendRadioCommEvent(struct RadioCommEventData *aEventData, const uint8_t *aPayload, size_t aLenPayload)
 {
+    struct Event event;
     assert(aLenPayload <= OT_EVENT_DATA_MAX_SIZE);
-    aEvent->mEvent = OT_SIM_EVENT_RADIO_COMM_TX;
-    memcpy(aEvent->mData, aTxEventData, sizeof(struct TxEventData));
-    memcpy(aEvent->mData + sizeof(struct TxEventData), aPayload, aLenPayload);
-    aEvent->mDataLength = sizeof(struct TxEventData) + aLenPayload;
+    event.mEvent = OT_SIM_EVENT_RADIO_COMM;
+    memcpy(event.mData, aEventData, sizeof(struct RadioCommEventData));
+    memcpy(event.mData + sizeof(struct RadioCommEventData), aPayload, aLenPayload);
+    event.mDataLength = sizeof(struct RadioCommEventData) + aLenPayload;
 
-    otSimSendEvent(aEvent);
+    otSimSendEvent(&event);
 }
 
-void otSimSendRadioChanSampleEvent(uint64_t aSampleDuration, struct ChanSampleEventData *aChanData)
+void otSimSendRadioChanSampleEvent(struct RadioCommEventData *aChanData)
 {
     struct Event event;
     event.mEvent = OT_SIM_EVENT_RADIO_CHAN_SAMPLE;
-    event.mDelay = aSampleDuration;
-    memcpy(event.mData, aChanData, sizeof(struct ChanSampleEventData));
-    event.mDataLength = sizeof(struct ChanSampleEventData);
+    event.mDelay = 0;
+    memcpy(event.mData, aChanData, sizeof(struct RadioCommEventData));
+    event.mDataLength = sizeof(struct RadioCommEventData);
 
     otSimSendEvent(&event);
 }
@@ -80,7 +81,7 @@ void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData)
     struct Event event;
     event.mEvent = OT_SIM_EVENT_RADIO_STATE;
     event.mDelay = 0;
-    memcpy(&event.mData, aStateData, sizeof(struct RadioStateEventData));
+    memcpy(event.mData, aStateData, sizeof(struct RadioStateEventData));
     event.mDataLength = sizeof(struct RadioStateEventData);
 
     otSimSendEvent(&event);

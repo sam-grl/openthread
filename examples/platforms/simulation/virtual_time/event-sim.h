@@ -23,20 +23,18 @@ void otSimSendEvent(struct Event *aEvent);
 void otSimSendSleepEvent(void);
 
 /**
- * This function sends a Radio Tx simulation event to the simulator. aEvent fields are
-* updated to the values as were used for sending it.
+ * This function sends a RadioComm (Tx) simulation event to the simulator.
  *
- * @param[in,out]   aEvent       A pointer to the simulation event to send.
- * @param[in]       aTxEventData A pointer to specific data for Radio Tx event.
+ * @param[in]       aEventData A pointer to specific data for RadioComm event.
  * @param[in]       aPayload     A pointer to the data payload (radio frame) to send.
  * @param[in]       aLenPayload  Length of aPayload data.
  */
-void otSimSendRadioTxEvent(struct Event *aEvent, struct TxEventData *aTxEventData,  const uint8_t *aPayload, size_t aLenPayload);
+void otSimSendRadioCommEvent(struct RadioCommEventData *aEventData,  const uint8_t *aPayload, size_t aLenPayload);
 
 /**
  * This function sends a Radio State simulation event to the simulator.
  *
- * @param[in]       aStateData A pointer to specific data for Radio State event.
+ * @param[in]  aStateData   A pointer to specific data for Radio State event.
  */
 void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData);
 
@@ -44,10 +42,9 @@ void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData);
  * This functions sends a channel sample simulation event to the simulator. It is used
  * for CCA or energy scanning on channels.
  *
- * @param[in]  aSampleDuration  Duration of sampling period in us.
- * @param[in]  aChanData        A pointer to channel-sample data instructing what to sample.
+ * @param[in]  aChanData    A pointer to channel-sample data instructing what to sample.
  */
-void otSimSendRadioChanSampleEvent(uint64_t aSampleDuration, struct ChanSampleEventData *aChanData);
+void otSimSendRadioChanSampleEvent(struct RadioCommEventData *aChanData);
 
 /**
  * This function sends a Uart data event to the simulator.

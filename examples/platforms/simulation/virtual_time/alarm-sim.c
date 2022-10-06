@@ -111,6 +111,11 @@ void platformAlarmMicroSetRadioEvent(uint64_t aTimeUs)
     sUsAlarmRadio = aTimeUs;
 }
 
+uint64_t  platformAlarmMicroGetRadioEvent(void)
+{
+    return sUsAlarmRadio;
+}
+
 uint64_t platformAlarmGetNext(void)
 {
     uint64_t remaining = INT64_MAX;

@@ -103,22 +103,27 @@ static void receiveEvent(otInstance *aInstance)
         otPlatUartReceived(event.mData, event.mDataLength);
         break;
 
-    case OT_SIM_EVENT_RADIO_COMM_RX:
-        VERIFY_EVENT_SIZE(struct RxEventData)
-        const size_t sz = sizeof(struct RxEventData);
-        platformRadioReceive(aInstance, evData + sz,
-                       event.mDataLength - sz, (struct RxEventData *)evData);
+    case OT_SIM_EVENT_RADIO_COMM:
+        VERIFY_EVENT_SIZE(struct RadioCommEventData)
+        platformRadioRxStart(aInstance, (struct RadioCommEventData *)evData);
+        break;
+
+    case OT_SIM_EVENT_RADIO_RX_DONE:
+        VERIFY_EVENT_SIZE(struct RadioCommEventData)
+        const size_t sz = sizeof(struct RadioCommEventData);
+        platformRadioRxDone(aInstance, evData + sz,
+                       event.mDataLength - sz, (struct RadioCommEventData *)evData);
         break;
 
     case OT_SIM_EVENT_RADIO_TX_DONE:
-        VERIFY_EVENT_SIZE(struct TxDoneEventData)
-        platformRadioTxDone(aInstance, (struct TxDoneEventData *)evData);
+        VERIFY_EVENT_SIZE(struct RadioCommEventData)
+        platformRadioTxDone(aInstance, (struct RadioCommEventData *)evData);
         break;
 
-    case OT_SIM_EVENT_CHAN_SAMPLE_DONE:
-        VERIFY_EVENT_SIZE(struct ChanSampleDoneEventData)
+    case OT_SIM_EVENT_RADIO_CHAN_SAMPLE:
+        VERIFY_EVENT_SIZE(struct RadioCommEventData)
         // TODO consider also energy-detect case. This only does CCA now.
-        platformRadioCcaDone(aInstance, (struct ChanSampleDoneEventData *)evData);
+        platformRadioCcaDone(aInstance, (struct RadioCommEventData *)evData);
         break;
 
     default:
