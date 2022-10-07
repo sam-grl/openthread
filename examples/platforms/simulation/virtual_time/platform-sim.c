@@ -74,12 +74,12 @@ static void handleSignal(int aSignal)
     gTerminate = true;
 }
 
-#define VERIFY_EVENT_SIZE(X) assert((uint16_t)rval >= (sizeof(X) + offsetof(struct Event, mData)) && "event payload smaller than: " && sizeof(X) );
+#define VERIFY_EVENT_SIZE(X) assert(((uint16_t)rval >= (sizeof(X) + offsetof(struct Event, mData))) && "received event payload too small" );
 static void receiveEvent(otInstance *aInstance)
 {
     struct Event event;
     ssize_t      rval = recvfrom(sSockFd, (char *)&event, sizeof(event), 0, NULL, NULL);
-    const uint8_t *evData = &event.mData[0];
+    const uint8_t *evData = event.mData;
 
     if (rval < 0 || (uint16_t)rval < offsetof(struct Event, mData))
     {
@@ -103,7 +103,7 @@ static void receiveEvent(otInstance *aInstance)
         otPlatUartReceived(event.mData, event.mDataLength);
         break;
 
-    case OT_SIM_EVENT_RADIO_COMM:
+    case OT_SIM_EVENT_RADIO_COMM_START:
         VERIFY_EVENT_SIZE(struct RadioCommEventData)
         platformRadioRxStart(aInstance, (struct RadioCommEventData *)evData);
         break;
@@ -279,6 +279,7 @@ void otSysProcessDrivers(otInstance *aInstance)
     if (!otTaskletsArePending(aInstance) && platformAlarmGetNext() > 0 &&
         (!platformRadioIsTransmitPending() || platformRadioIsBusy()) )
     {
+        platformRadioReportStateToSimulator();
         otSimSendSleepEvent();
 
         rval = select(max_fd + 1, &read_fds, &write_fds, &error_fds, NULL);

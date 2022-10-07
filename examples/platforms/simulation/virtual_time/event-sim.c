@@ -57,7 +57,7 @@ void otSimSendRadioCommEvent(struct RadioCommEventData *aEventData, const uint8_
 {
     struct Event event;
     assert(aLenPayload <= OT_EVENT_DATA_MAX_SIZE);
-    event.mEvent = OT_SIM_EVENT_RADIO_COMM;
+    event.mEvent = OT_SIM_EVENT_RADIO_COMM_START;
     memcpy(event.mData, aEventData, sizeof(struct RadioCommEventData));
     memcpy(event.mData + sizeof(struct RadioCommEventData), aPayload, aLenPayload);
     event.mDataLength = sizeof(struct RadioCommEventData) + aLenPayload;

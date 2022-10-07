@@ -106,9 +106,12 @@ void otPlatAlarmMicroStop(otInstance *aInstance)
     sIsUsRunning = false;
 }
 
-void platformAlarmMicroSetRadioEvent(uint64_t aTimeUs)
+void platformAlarmMicroSetRadioEvent(uint64_t aDelta)
 {
-    sUsAlarmRadio = aTimeUs;
+    if (aDelta == 0)
+        sUsAlarmRadio = 0;
+    else
+        sUsAlarmRadio = sNow + aDelta;
 }
 
 uint64_t  platformAlarmMicroGetRadioEvent(void)

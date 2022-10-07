@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2016, The OpenThread Authors.
+ *  Copyright (c) 2016-2022, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -61,21 +61,22 @@
 #include "openthread-core-config.h"
 #include "platform-config.h"
 
+/**
+ * The event types defined for communication with a simulator and/or with other simulated nodes.
+ */
 enum
 {
     OT_SIM_EVENT_ALARM_FIRED         = 0,
-    //OT_SIM_EVENT_RADIO_RECEIVED      = 1,
+    OT_SIM_EVENT_RADIO_RECEIVED      = 1,
     OT_SIM_EVENT_UART_WRITE          = 2,
-    //OT_SIM_EVENT_RADIO_SPINEL_WRITE  = 3,
-    //OT_SIM_EVENT_POSTCMD             = 4,
+    OT_SIM_EVENT_RADIO_SPINEL_WRITE  = 3,
+    OT_SIM_EVENT_POSTCMD             = 4,
     OT_SIM_EVENT_OTNS_STATUS_PUSH    = 5,
-    OT_SIM_EVENT_RADIO_COMM          = 6,
+    OT_SIM_EVENT_RADIO_COMM_START    = 6,
     OT_SIM_EVENT_RADIO_TX_DONE       = 7,
     OT_SIM_EVENT_RADIO_CHAN_SAMPLE   = 8,
     OT_SIM_EVENT_RADIO_STATE         = 9,
     OT_SIM_EVENT_RADIO_RX_DONE       = 10,
-
-    OT_EVENT_DATA_MAX_SIZE = 1024,
 };
 
 /**
@@ -84,14 +85,17 @@ enum
 typedef enum
 {
     OT_RADIO_SUBSTATE_READY,
-    OT_RADIO_SUBSTATE_ONGOING_FRAME,
-    OT_RADIO_SUBSTATE_IFS_WAIT,
-    OT_RADIO_SUBSTATE_ONGOING_ACK,
     OT_RADIO_SUBSTATE_CCA,
     OT_RADIO_SUBSTATE_CCA_TO_TX,
-    OT_RADIO_SUBSTATE_TURNAROUND_TX_RX,
+    OT_RADIO_SUBSTATE_FRAME_ONGOING,
+    OT_RADIO_SUBSTATE_TX_TO_RX,
+    OT_RADIO_SUBSTATE_AIFS_WAIT,
+    OT_RADIO_SUBSTATE_ACK_ONGOING,
+    OT_RADIO_SUBSTATE_IFS_WAIT,
     OT_RADIO_SUBSTATE_ENERGY_SCAN,
 } RadioSubState;
+
+enum { OT_EVENT_DATA_MAX_SIZE = 1024 };
 
 OT_TOOL_PACKED_BEGIN
 struct Event
@@ -108,7 +112,7 @@ struct RadioCommEventData
     uint8_t  mChannel;
     int8_t   mPower;      // power value (dBm), RSSI or Tx-power
     uint8_t  mError;      // status code result of radio operation
-    uint64_t mDuration;   // us
+    uint64_t mDuration;   // us duration of the radio comm operation
 } OT_TOOL_PACKED_END;
 
 OT_TOOL_PACKED_BEGIN
@@ -117,6 +121,7 @@ struct RadioStateEventData
     uint8_t  mChannel;
     int8_t   mTxPower;  // only used when mState == OT_RADIO_STATE_TRANSMIT
     uint8_t  mState;
+    uint8_t  mSubState;
 } OT_TOOL_PACKED_END;
 
 /**
@@ -155,7 +160,7 @@ void platformAlarmProcess(otInstance *aInstance);
 /**
  * This function returns the duration to the next alarm event time (in micro seconds)
  *
- * @returns The duration (in micro seconds) to the next alarm event.
+ * @returns The duration (in micro seconds, us) to the next alarm event.
  *
  */
 uint64_t platformAlarmGetNext(void);
@@ -163,7 +168,7 @@ uint64_t platformAlarmGetNext(void);
 /**
  * This function returns the current alarm time.
  *
- * @returns The current alarm time.
+ * @returns The current alarm time (us).
  *
  */
 uint64_t platformAlarmGetNow(void);
@@ -171,12 +176,27 @@ uint64_t platformAlarmGetNow(void);
 /**
  * This function advances the alarm time by @p aDelta.
  *
- * @param[in]  aDelta  The amount of time to advance.
+ * @param[in]  aDelta  The amount of time (us) to advance.
  *
  */
 void platformAlarmAdvanceNow(uint64_t aDelta);
 
-void platformAlarmMicroSetRadioEvent(uint64_t aTimeUs);
+/**
+ * This function sets the timer for the next radio operation.
+ *
+ * @param[in]  aDelta  The time delta (us) counted from now, when a next radio operation occurs.
+ *                     If 0, it resets the radio operation timer to 0.
+ *
+ */
+void platformAlarmMicroSetRadioEvent(uint64_t aDelta);
+
+/**
+ * This function gets the absolute time (us) at which the next radio operation is scheduled to occur.
+ * If 0 is returned, it means no operation is yet scheduled.
+ *
+ * @returns The scheduled alarm time for the next radio operation (us), or 0 if nothing scheduled.
+ *
+ */
 uint64_t platformAlarmMicroGetRadioEvent(void);
 
 /**
@@ -288,6 +308,9 @@ bool platformRadioIsTransmitPending(void);
  *
  */
 bool platformRadioIsBusy(void);
+
+// TODO
+void platformRadioReportStateToSimulator(void);
 
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
 
