@@ -33,6 +33,8 @@
 #include "virtual_time/event-sim.h"
 
 #include <sys/time.h>
+#include <stdio.h>
+#include <execinfo.h>
 
 #include <openthread/platform/alarm-milli.h>
 #include <openthread/platform/radio.h>
@@ -42,7 +44,7 @@
 #include "utils/mac_frame.h"
 #include "utils/soft_source_match_table.h"
 
-#define FAILSAFE_TIME_US 16
+#define FAILSAFE_TIME_US 4
 
 // declaration of radio functions only locally used for virtual-time radio
 static void setRadioSubState(RadioSubState aState, uint64_t timeToRemainInState);
@@ -110,7 +112,14 @@ void platformRadioReportStateToSimulator()
 
 void setRadioState(otRadioState aState)
 {
-    assert(sSubState == OT_RADIO_SUBSTATE_READY || sSubState == OT_RADIO_SUBSTATE_IFS_WAIT);
+    if (aState != sState)
+    {
+        //TODO fprintf(stderr, "setRadioState(): sSt=%i aSt=%i sSub=%i\n", sState, aState, sSubState);
+        // Check for valid conditions under which state change is allowed.
+        assert(sSubState == OT_RADIO_SUBSTATE_READY ||
+               sSubState == OT_RADIO_SUBSTATE_IFS_WAIT ||
+               ((aState = OT_RADIO_STATE_RECEIVE) && (sSubState == OT_RADIO_SUBSTATE_TX_TO_RX)));
+    }
     sState = aState;
 }
 
@@ -162,6 +171,7 @@ void platformRadioRxStart(otInstance *aInstance, struct RadioCommEventData *aRxP
         setRadioSubState(OT_RADIO_SUBSTATE_ACK_ONGOING, aRxParams->mDuration + FAILSAFE_TIME_US);
     }
     sReceiveFrame.mInfo.mRxInfo.mRssi = aRxParams->mPower;
+    sReceiveFrame.mInfo.mRxInfo.mLqi  = OT_RADIO_LQI_NONE; // No support of LQI reporting.
 
 exit:
     return;
@@ -182,16 +192,18 @@ void platformRadioRxDone(otInstance *aInstance, const uint8_t *aBuf, uint16_t aB
     sReceiveFrame.mInfo.mRxInfo.mRssi = aRxParams->mPower;
     sReceiveFrame.mInfo.mRxInfo.mLqi  = OT_RADIO_LQI_NONE; // No support of LQI reporting.
 
-    radioReceive(aInstance, aRxParams->mError );
-
-    if (sSubState == OT_RADIO_SUBSTATE_FRAME_ONGOING && otMacFrameIsAckRequested(&sReceiveFrame))
+    if (sState == OT_RADIO_STATE_RECEIVE &&
+        sSubState == OT_RADIO_SUBSTATE_FRAME_ONGOING && otMacFrameIsAckRequested(&sReceiveFrame))
     {
+        // wait exactly time AIFS before sending out the Ack.
         setRadioSubState(OT_RADIO_SUBSTATE_AIFS_WAIT, OT_RADIO_AIFS_TIME_US);
     }
     else
     {
         setRadioSubState(OT_RADIO_SUBSTATE_IFS_WAIT, OT_RADIO_SIFS_TIME_US); // TODO lifs
     }
+
+    radioReceive(aInstance, aRxParams->mError );
 
 exit:
     return;
@@ -211,8 +223,8 @@ void platformRadioCcaDone(otInstance *aInstance, struct RadioCommEventData *aCha
     {
         // CCA failure case - channel not clear.
         sTxWait = false;
-        setRadioState(OT_RADIO_STATE_RECEIVE);
         setRadioSubState(OT_RADIO_SUBSTATE_READY, 0);
+        setRadioState(OT_RADIO_STATE_RECEIVE);
 
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
         if (otPlatDiagModeGet())
@@ -234,17 +246,18 @@ void platformRadioTxDone(otInstance *aInstance, struct RadioCommEventData *aTxDo
 {
     OT_UNUSED_VARIABLE(aInstance);
 
-    if (sState == OT_RADIO_STATE_RECEIVE && sSubState == OT_RADIO_SUBSTATE_AIFS_WAIT)
+    if (sState == OT_RADIO_STATE_RECEIVE && sSubState == OT_RADIO_SUBSTATE_ACK_ONGOING)
     {
         // Ack Tx is done now.
+        setRadioSubState(OT_RADIO_SUBSTATE_TX_TO_RX, OT_RADIO_TURNAROUND_TIME_US);
     }
-    else if (sTxWait)
+    else if (sState == OT_RADIO_STATE_TRANSMIT && sSubState == OT_RADIO_SUBSTATE_FRAME_ONGOING)
     {
-        // if not waiting for ACK -> Rx state; see state diagram.
-        // if Tx was failure: no wait for ACK, abort current Tx.
+        // if not waiting for ACK -> go to Rx state; see state diagram.
+        // if Tx was failure: no wait for ACK, abort current Tx and go to Rx state.
         if (!otMacFrameIsAckRequested(&sTransmitFrame) || aTxDoneParams->mError != OT_ERROR_NONE)
         {
-            sTxWait = false;
+            setRadioSubState(OT_RADIO_SUBSTATE_TX_TO_RX, OT_RADIO_TURNAROUND_TIME_US);
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
             if (otPlatDiagModeGet())
             {
@@ -255,6 +268,10 @@ void platformRadioTxDone(otInstance *aInstance, struct RadioCommEventData *aTxDo
             {
                 otPlatRadioTxDone(aInstance, &sTransmitFrame, NULL, aTxDoneParams->mError);
             }
+        }
+        else if (otMacFrameIsAckRequested(&sTransmitFrame))
+        {
+            setRadioSubState(OT_RADIO_SUBSTATE_TX_TO_RX, OT_RADIO_TURNAROUND_TIME_US);
         }
     }
 }
@@ -272,7 +289,7 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
         case OT_RADIO_SUBSTATE_READY:  // initial substate
             if (platformRadioIsTransmitPending())
             {
-                setRadioSubState(OT_RADIO_SUBSTATE_CCA, OT_RADIO_CCA_TIME_US);
+                setRadioSubState(OT_RADIO_SUBSTATE_CCA, OT_RADIO_CCA_TIME_US + FAILSAFE_TIME_US);
                 startCcaForTransmission(aInstance);
             }
             break;
@@ -282,7 +299,7 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
             break;
 
         case OT_RADIO_SUBSTATE_CCA_TO_TX:
-            setRadioSubState(OT_RADIO_SUBSTATE_FRAME_ONGOING, sLastTxEventData.mDuration);
+            setRadioSubState(OT_RADIO_SUBSTATE_FRAME_ONGOING, sLastTxEventData.mDuration + FAILSAFE_TIME_US);
             radioSendMessage(aInstance);
             break;
 
@@ -291,7 +308,7 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
             break;
 
         case OT_RADIO_SUBSTATE_TX_TO_RX:
-            if (sTxWait && otMacFrameIsAckRequested(&sTransmitFrame))
+            if (otMacFrameIsAckRequested(&sTransmitFrame))
             {
                 // set a max wait time for start of Ack frame to be received.
                 setRadioSubState(OT_RADIO_SUBSTATE_AIFS_WAIT, OT_RADIO_MAX_ACK_WAIT_US);
@@ -300,6 +317,7 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
             {
                 // no Ack was requested
                 setRadioSubState(OT_RADIO_SUBSTATE_IFS_WAIT, OT_RADIO_SIFS_TIME_US - OT_RADIO_TURNAROUND_TIME_US); // TODO LIFS also
+                sTxWait = false;
             }
             break;
 
@@ -307,18 +325,41 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
             // if we arrive here on the timeout timer, an Ack or frame start wasn't received in the meantime.
             // so go to ready state and fail the Tx.
             setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
-
+            setRadioState(OT_RADIO_STATE_RECEIVE);
+            sTxWait = false;
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+            if (otPlatDiagModeGet())
+            {
+                otPlatDiagRadioTransmitDone(aInstance, &sTransmitFrame, OT_ERROR_NO_ACK);
+            }
+            else
+#endif
+            {
+                otPlatRadioTxDone(aInstance, &sTransmitFrame, NULL, OT_ERROR_NO_ACK);
+            }
             break;
 
         case OT_RADIO_SUBSTATE_ACK_ONGOING:
             // wait until Ack receive is done. In platformRadioRxDone() the next state is selected.
             // if we get here on the timer, this ongoing Ack wasn't received properly.
             setRadioSubState(OT_RADIO_SUBSTATE_IFS_WAIT, OT_RADIO_SIFS_TIME_US); // TODO lifs
+            sTxWait = false;
+#if OPENTHREAD_CONFIG_DIAG_ENABLE
+            if (otPlatDiagModeGet())
+            {
+                otPlatDiagRadioTransmitDone(aInstance, &sTransmitFrame, OT_ERROR_NO_ACK);
+            }
+            else
+#endif
+            {
+                otPlatRadioTxDone(aInstance, &sTransmitFrame, NULL, OT_ERROR_NO_ACK);
+            }
             break;
 
         case OT_RADIO_SUBSTATE_IFS_WAIT:
-            setRadioState(OT_RADIO_STATE_RECEIVE);
             setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
+            setRadioState(OT_RADIO_STATE_RECEIVE);
+            sTxWait = false;
             break;
 
         case OT_RADIO_SUBSTATE_ENERGY_SCAN:
@@ -341,13 +382,8 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
 
         case OT_RADIO_SUBSTATE_FRAME_ONGOING:
             // wait until frame Rx is done. In platformRadioRxDone() the next state is selected.
-            // below is a timer-based failsafe in case the message from simulator was never received.
+            // below is a timer-based failsafe in case the RxDone message from simulator was never received.
             setRadioSubState(OT_RADIO_SUBSTATE_IFS_WAIT, OT_RADIO_SIFS_TIME_US); // TODO LIFS also
-            break;
-
-        case OT_RADIO_SUBSTATE_TX_TO_RX:
-            // After Ack Tx.
-            setRadioSubState(OT_RADIO_SUBSTATE_IFS_WAIT, OT_RADIO_SIFS_TIME_US - OT_RADIO_TURNAROUND_TIME_US); // TODO LIFS also
             break;
 
         case OT_RADIO_SUBSTATE_AIFS_WAIT:
@@ -362,9 +398,14 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
             setRadioSubState(OT_RADIO_SUBSTATE_TX_TO_RX, OT_RADIO_TURNAROUND_TIME_US);
             break;
 
+        case OT_RADIO_SUBSTATE_TX_TO_RX:
+            // After Ack Tx.
+            setRadioSubState(OT_RADIO_SUBSTATE_IFS_WAIT, OT_RADIO_SIFS_TIME_US - OT_RADIO_TURNAROUND_TIME_US); // TODO LIFS also
+            break;
+
         case OT_RADIO_SUBSTATE_IFS_WAIT:
-            setRadioState(OT_RADIO_STATE_RECEIVE); // ready for next Rx or Tx
             setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
+            setRadioState(OT_RADIO_STATE_RECEIVE); // ready for next Rx or Tx
             break;
 
         case OT_RADIO_SUBSTATE_ENERGY_SCAN:

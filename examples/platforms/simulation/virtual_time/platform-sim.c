@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2018, The OpenThread Authors.
+ *  Copyright (c) 2018-2022, The OpenThread Authors.
  *  All rights reserved.
  *
  *  Redistribution and use in source and binary forms, with or without
@@ -122,6 +122,11 @@ static void receiveEvent(otInstance *aInstance)
         VERIFY_EVENT_SIZE(struct RadioCommEventData)
         // TODO consider also energy-detect case. This only does CCA now.
         platformRadioCcaDone(aInstance, (struct RadioCommEventData *)evData);
+        break;
+
+    case OT_SIM_EVENT_RADIO_STATE:
+        // Not further parsed. Simulator uses this to wake the OT node when it's time for a next
+        // radio-state transition.
         break;
 
     default:
