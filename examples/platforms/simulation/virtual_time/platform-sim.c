@@ -29,14 +29,13 @@
 /**
  * @file
  * @brief
- *   This file includes the platform-specific initializers.
+ *   This file includes the platform-specific initializers and processing functions.
  */
-
-#include "platform-simulation.h"
 
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME
 
-#include "event-sim.h"
+#include "platform-simulation.h"
+#include "virtual_time/event-sim.h"
 
 #include <assert.h>
 #include <errno.h>
@@ -48,11 +47,10 @@
 #include <syslog.h>
 
 #include <openthread/tasklet.h>
-#include <openthread/platform/alarm-milli.h>
-#include <openthread/platform/radio.h>
+//#include <openthread/platform/alarm-milli.h>
+//#include <openthread/platform/radio.h>
 
 #include "utils/uart.h"
-//#include "core/common/debug.hpp"
 
 uint32_t gNodeId        = 1;
 uint64_t gLastAlarmEventId = 0;
@@ -279,9 +277,11 @@ void otSysProcessDrivers(otInstance *aInstance)
     if (!otTaskletsArePending(aInstance) && platformAlarmGetNext() > 0 &&
         (!platformRadioIsTransmitPending() || platformRadioIsBusy()) )
     {
+        // report my final radio state at end of this time instant, then go to sleep.
         platformRadioReportStateToSimulator();
         otSimSendSleepEvent();
 
+        // wake up by reception of UDP event from simulator.
         rval = select(max_fd + 1, &read_fds, &write_fds, &error_fds, NULL);
 
         if ((rval < 0) && (errno != EINTR))

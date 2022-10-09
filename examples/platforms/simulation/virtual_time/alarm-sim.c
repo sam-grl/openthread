@@ -47,7 +47,6 @@ static uint32_t sMsAlarm     = 0;
 
 static bool     sIsUsRunning = false;
 static uint32_t sUsAlarm     = 0;
-static uint64_t sUsAlarmRadio = 0;
 
 void platformAlarmInit(uint32_t aSpeedUpFactor)
 {
@@ -106,19 +105,6 @@ void otPlatAlarmMicroStop(otInstance *aInstance)
     sIsUsRunning = false;
 }
 
-void platformAlarmMicroSetRadioEvent(uint64_t aDelta)
-{
-    if (aDelta == 0)
-        sUsAlarmRadio = 0;
-    else
-        sUsAlarmRadio = sNow + aDelta;
-}
-
-uint64_t  platformAlarmMicroGetRadioEvent(void)
-{
-    return sUsAlarmRadio;
-}
-
 uint64_t platformAlarmGetNext(void)
 {
     uint64_t remaining = INT64_MAX;
@@ -154,10 +140,6 @@ uint64_t platformAlarmGetNext(void)
     }
 #endif
 
-    // check remaining time for radio-us alarm.
-    if ( sUsAlarmRadio > sNow && (sUsAlarmRadio - sNow) < remaining) {
-        remaining = (sUsAlarmRadio - sNow);
-    }
     return remaining;
 }
 

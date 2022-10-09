@@ -76,11 +76,11 @@ void otSimSendRadioChanSampleEvent(struct RadioCommEventData *aChanData)
     otSimSendEvent(&event);
 }
 
-void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData)
+void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData, uint64_t aDeltaUntilNextRadioState)
 {
     struct Event event;
     event.mEvent = OT_SIM_EVENT_RADIO_STATE;
-    event.mDelay = 0;
+    event.mDelay = aDeltaUntilNextRadioState;
     memcpy(event.mData, aStateData, sizeof(struct RadioStateEventData));
     event.mDataLength = sizeof(struct RadioStateEventData);
 

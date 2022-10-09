@@ -61,8 +61,11 @@
 #include "openthread-core-config.h"
 #include "platform-config.h"
 
+#define UNDEFINED_TIME_US 0  // an undefined period of time (us) that is > 0
+
 /**
  * The event types defined for communication with a simulator and/or with other simulated nodes.
+ * Shared for both 'real' and virtual-time event types.
  */
 enum
 {
@@ -79,50 +82,7 @@ enum
     OT_SIM_EVENT_RADIO_RX_DONE       = 10,
 };
 
-/**
- * The sub-states of the simulated radio while it is in Tx or Rx state.
- */
-typedef enum
-{
-    OT_RADIO_SUBSTATE_READY,
-    OT_RADIO_SUBSTATE_CCA,
-    OT_RADIO_SUBSTATE_CCA_TO_TX,
-    OT_RADIO_SUBSTATE_FRAME_ONGOING,
-    OT_RADIO_SUBSTATE_TX_TO_RX,
-    OT_RADIO_SUBSTATE_AIFS_WAIT,
-    OT_RADIO_SUBSTATE_ACK_ONGOING,
-    OT_RADIO_SUBSTATE_IFS_WAIT,
-    OT_RADIO_SUBSTATE_ENERGY_SCAN,
-} RadioSubState;
-
 enum { OT_EVENT_DATA_MAX_SIZE = 1024 };
-
-OT_TOOL_PACKED_BEGIN
-struct Event
-{
-    uint64_t mDelay;
-    uint8_t  mEvent;
-    uint16_t mDataLength;
-    uint8_t  mData[OT_EVENT_DATA_MAX_SIZE];
-} OT_TOOL_PACKED_END;
-
-OT_TOOL_PACKED_BEGIN
-struct RadioCommEventData
-{
-    uint8_t  mChannel;
-    int8_t   mPower;      // power value (dBm), RSSI or Tx-power
-    uint8_t  mError;      // status code result of radio operation
-    uint64_t mDuration;   // us duration of the radio comm operation
-} OT_TOOL_PACKED_END;
-
-OT_TOOL_PACKED_BEGIN
-struct RadioStateEventData
-{
-    uint8_t  mChannel;
-    int8_t   mTxPower;  // only used when mState == OT_RADIO_STATE_TRANSMIT
-    uint8_t  mState;
-    uint8_t  mSubState;
-} OT_TOOL_PACKED_END;
 
 /**
  * Unique node ID.
@@ -131,7 +91,7 @@ struct RadioStateEventData
 extern uint32_t gNodeId;
 
 /**
- * ID of last received Alarm from simulator, or 0 if none received.
+ * ID of last received Alarm event from simulator, or 0 if no ID yet received.
  */
 extern uint64_t gLastAlarmEventId;
 
@@ -182,24 +142,6 @@ uint64_t platformAlarmGetNow(void);
 void platformAlarmAdvanceNow(uint64_t aDelta);
 
 /**
- * This function sets the timer for the next radio operation.
- *
- * @param[in]  aDelta  The time delta (us) counted from now, when a next radio operation occurs.
- *                     If 0, it resets the radio operation timer to 0.
- *
- */
-void platformAlarmMicroSetRadioEvent(uint64_t aDelta);
-
-/**
- * This function gets the absolute time (us) at which the next radio operation is scheduled to occur.
- * If 0 is returned, it means no operation is yet scheduled.
- *
- * @returns The scheduled alarm time for the next radio operation (us), or 0 if nothing scheduled.
- *
- */
-uint64_t platformAlarmMicroGetRadioEvent(void);
-
-/**
  * This function initializes the radio service used by OpenThread.
  *
  */
@@ -210,37 +152,6 @@ void platformRadioInit(void);
  *
  */
 void platformRadioDeinit(void);
-
-/**
- * This function signals the start of a received radio frame.
- *
- * @param[in]  aInstance   A pointer to the OpenThread instance.
- * @param[in]  aRxParams   A pointer to parameters related to the reception event.
- *
- */
-void platformRadioRxStart(otInstance *aInstance, struct RadioCommEventData *aRxParams);
-
-/**
- * This function signals the end of a received radio frame and inputs the frame data.
- *
- * @param[in]  aInstance   A pointer to the OpenThread instance.
- * @param[in]  aBuf        A pointer to the received radio frame (struct RadioMessage).
- * @param[in]  aBufLength  The size of the received radio frame (struct RadioMessage).
- * @param[in]  aRxParams   A pointer to parameters related to the reception event.
- *
- */
-void platformRadioRxDone(otInstance *aInstance, const uint8_t *aBuf, uint16_t aBufLength, struct RadioCommEventData *aRxParams);
-
-/**
- * This function signals that virtual radio is done transmitting a single frame.
- *
- * @param[in]  aInstance     A pointer to the OpenThread instance.
- * @param[in]  aTxDoneParams A pointer to status parameters for the attempt to transmit the virtual radio frame.
- *
- */
-void platformRadioTxDone(otInstance *aInstance, struct RadioCommEventData *aTxDoneParams);
-
-void platformRadioCcaDone(otInstance *aInstance, struct RadioCommEventData *aChanData);
 
 /**
  * This function updates the file descriptor sets with file descriptors used by the radio driver.
@@ -300,16 +211,10 @@ void platformUartRestore(void);
 bool platformRadioIsTransmitPending(void);
 
 /**
- * This function checks if the radio is busy performing some task such as transmission,
- * actively receiving a frame, returning an ACK, or doing a CCA. Idle listening (Rx) does
- * not count as busy.
- *
- * @returns Whether radio is busy with a task.
+ * This function lets the radio report its state to the simulator, for bookkeeping and
+ * energy-monitoring purposes.
  *
  */
-bool platformRadioIsBusy(void);
-
-// TODO
 void platformRadioReportStateToSimulator(void);
 
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
