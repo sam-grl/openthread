@@ -104,6 +104,7 @@ exit:
 
 // helper function to invoke otPlatRadioTxDone() and its diagnostic equivalent.
 static void signalRadioTxDone(otInstance *aInstance, otRadioFrame *aFrame, otRadioFrame *aAckFrame, otError aError) {
+    setRadioState(OT_RADIO_STATE_RECEIVE); // set per state diagram in radio.hpp
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
     if (otPlatDiagModeGet())
     {
