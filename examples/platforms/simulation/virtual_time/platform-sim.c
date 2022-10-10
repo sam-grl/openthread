@@ -47,8 +47,6 @@
 #include <syslog.h>
 
 #include <openthread/tasklet.h>
-//#include <openthread/platform/alarm-milli.h>
-//#include <openthread/platform/radio.h>
 
 #include "utils/uart.h"
 
@@ -72,7 +70,7 @@ static void handleSignal(int aSignal)
     gTerminate = true;
 }
 
-#define VERIFY_EVENT_SIZE(X) assert(((uint16_t)rval >= (sizeof(X) + offsetof(struct Event, mData))) && "received event payload too small" );
+#define VERIFY_EVENT_SIZE(X) assert( (payloadLen >= sizeof(X)) && "received event payload too small" );
 static void receiveEvent(otInstance *aInstance)
 {
     struct Event event;
@@ -84,6 +82,7 @@ static void receiveEvent(otInstance *aInstance)
         perror("recvfrom");
         exit(EXIT_FAILURE);
     }
+    size_t payloadLen = rval - offsetof(struct Event, mData);
 
     platformAlarmAdvanceNow(event.mDelay);
 
@@ -91,9 +90,9 @@ static void receiveEvent(otInstance *aInstance)
     {
     case OT_SIM_EVENT_ALARM_FIRED:
         // store the optional msg id from payload
-        if ((uint16_t)rval >= sizeof(gLastAlarmEventId) + offsetof(struct Event, mData))
+        if (payloadLen >= sizeof(gLastAlarmEventId))
         {
-            memcpy(&gLastAlarmEventId, event.mData, sizeof(gLastAlarmEventId));
+            gLastAlarmEventId = (uint64_t) *evData;
         }
         break;
 
@@ -126,7 +125,7 @@ static void receiveEvent(otInstance *aInstance)
 
     case OT_SIM_EVENT_RADIO_STATE:
         // Not further parsed. Simulator uses this to wake the OT node when it's time for a next
-        // radio-state transition.
+        // radio-state transition in the radio-sim.c state machines.
         break;
 
     default:

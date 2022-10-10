@@ -52,7 +52,7 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
 void setRadioState(otRadioState aState);
 void radioPrepareAck(void);
 bool IsTimeAfterOrEqual(uint32_t aTimeA, uint32_t aTimeB);
-static void radioProcessFrame(otInstance *aInstance, otError aError);
+void radioProcessFrame(otInstance *aInstance, otError aError);
 
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
 static uint8_t generateAckIeData(uint8_t *aLinkMetricsIeData, uint8_t aLinkMetricsIeDataLen);
@@ -379,47 +379,52 @@ bool otPlatRadioGetPromiscuous(otInstance *aInstance)
     return sPromiscuous;
 }
 
-void radioReceive(otInstance *aInstance, otError aError)
+#if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
+void radioReceive(otInstance *aInstance)
 {
-    bool isAck                = otMacFrameIsAck(&sReceiveFrame);
-    otEXPECT(sCurrentChannel == sReceiveMessage.mChannel);
+    bool isTxDone = false;
+    bool isAck    = otMacFrameIsAck(&sReceiveFrame);
+
+    otEXPECT(sReceiveFrame.mChannel == sReceiveMessage.mChannel);
     otEXPECT(sState == OT_RADIO_STATE_RECEIVE || sState == OT_RADIO_STATE_TRANSMIT);
 
-    // TODO replace by SFD timestamp in virtual-time case.
+    // Unable to simulate SFD, so use the rx done timestamp instead.
     sReceiveFrame.mInfo.mRxInfo.mTimestamp = otPlatTimeGet();
 
-    if (sTxWait && otMacFrameIsAckRequested(&sTransmitFrame))
+    if (sTxWait)
     {
-        // TODO: for Enh-Ack, look at address match too.
-        bool isAwaitedAckReceived = isAck && otMacFrameGetSequence(&sReceiveFrame) == otMacFrameGetSequence(&sTransmitFrame);
-        // Stop Tx state, any later Ack would be out of the acceptable 802.15.4 time boundaries anyway.
+        if (otMacFrameIsAckRequested(&sTransmitFrame))
+        {
+            isTxDone = isAck && otMacFrameGetSequence(&sReceiveFrame) == otMacFrameGetSequence(&sTransmitFrame);
+        }
+    }
+
+    if (isTxDone)
+    {
         setRadioState(OT_RADIO_STATE_RECEIVE);
         sTxWait = false;
-        if (!isAwaitedAckReceived)
-        {
-            aError = OT_ERROR_NO_ACK;
-        }
 
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
+
         if (otPlatDiagModeGet())
         {
-            otPlatDiagRadioTransmitDone(aInstance, &sTransmitFrame, aError);
+            otPlatDiagRadioTransmitDone(aInstance, &sTransmitFrame, OT_ERROR_NONE);
         }
         else
 #endif
         {
-            otPlatRadioTxDone(aInstance, &sTransmitFrame, (isAck ? &sReceiveFrame : NULL), aError);
+            otPlatRadioTxDone(aInstance, &sTransmitFrame, (isAck ? &sReceiveFrame : NULL), OT_ERROR_NONE);
         }
-
     }
     else if (!isAck || sPromiscuous)
     {
-        radioProcessFrame(aInstance, aError);
+        radioProcessFrame(aInstance);
     }
 
 exit:
     return;
 }
+#endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
 
 static void radioComputeCrc(struct RadioMessage *aMessage, uint16_t aLength)
 {
@@ -642,7 +647,7 @@ static uint8_t generateAckIeData(uint8_t *aLinkMetricsIeData, uint8_t aLinkMetri
 }
 #endif
 
-static void radioProcessFrame(otInstance *aInstance, otError aError)
+void radioProcessFrame(otInstance *aInstance, otError aError)
 {
     otError      error = aError;
     otMacAddress macAddress;
@@ -1095,7 +1100,7 @@ exit:
     }
 }
 
-static void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame)
+void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame)
 {
     ssize_t            rval;
     struct sockaddr_in sockaddr;
@@ -1116,7 +1121,7 @@ static void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFra
     }
 }
 
-static void setRadioState(otRadioState aState)
+void setRadioState(otRadioState aState)
 {
     sState = aState;
 }
