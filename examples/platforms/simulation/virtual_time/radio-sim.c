@@ -168,14 +168,15 @@ void setRadioState(otRadioState aState)
     {
         switch (aState) {
         case OT_RADIO_STATE_DISABLED:
+            // force the radio to stop, resetting substate.
             setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
             break;
         case OT_RADIO_STATE_SLEEP:
-            setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
+            // move naturally out of current substate. Allow AckTx/IFS/etc to conclude.
             break;
         case OT_RADIO_STATE_TRANSMIT:
             if (sState == OT_RADIO_STATE_RECEIVE){
-                // let the substate naturally progress to READY, if not already there..
+                // let the substate naturally progress to READY, if not already there.
             }else{
                 setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
             }
