@@ -1035,6 +1035,7 @@ exit:
     return error;
 }
 
+// below are the non-virtual-time (real) radio functions
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
 static void initFds(void)
 {
@@ -1228,8 +1229,7 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
         otPlatRadioEnergyScanDone(aInstance, sEnergyScanResult);
     }
 }
-
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
 
-// include the virtual-time radio functions
+// include the virtual-time radio functions; only active if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 1
 #include "virtual_time/radio-sim.c"
