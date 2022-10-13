@@ -76,7 +76,6 @@ void radioReceive(otInstance *aInstance, otError aError)
 {
     bool isAck = otMacFrameIsAck(&sReceiveFrame);
 
-    otEXPECT(sCurrentChannel == sReceiveMessage.mChannel);
     otEXPECT(sState == OT_RADIO_STATE_RECEIVE || sState == OT_RADIO_STATE_TRANSMIT);
 
     // TODO replace by SFD timestamp
@@ -84,14 +83,16 @@ void radioReceive(otInstance *aInstance, otError aError)
 
     if (sTxWait && otMacFrameIsAckRequested(&sTransmitFrame))
     {
+        otError txDoneError = OT_ERROR_NONE;
         // TODO: for Enh-Ack, look at address match too.
-        bool isAwaitedAckReceived = isAck && otMacFrameGetSequence(&sReceiveFrame) == otMacFrameGetSequence(&sTransmitFrame);
+        bool isAwaitedAckReceived = isAck && aError == OT_ERROR_NONE &&
+                   otMacFrameGetSequence(&sReceiveFrame) == otMacFrameGetSequence(&sTransmitFrame);
         sTxWait = false;
         if (!isAwaitedAckReceived)
         {
-            aError = OT_ERROR_NO_ACK;
+            txDoneError = OT_ERROR_NO_ACK;
         }
-        signalRadioTxDone(aInstance,&sTransmitFrame, (isAck ? &sReceiveFrame : NULL), aError);
+        signalRadioTxDone(aInstance,&sTransmitFrame, (isAck ? &sReceiveFrame : NULL), txDoneError);
     }
     else if (!isAck || sPromiscuous)
     {
@@ -253,8 +254,7 @@ void platformRadioRxDone(otInstance *aInstance, const uint8_t *aBuf, uint16_t aB
 {
     OT_UNUSED_VARIABLE(aInstance);
 
-    otEXPECT(sCurrentChannel == aRxParams->mChannel); // if frame not on my listening channel, ignore.
-    // only process in valid states:
+    // only process in valid substates:
     otEXPECT( sSubState == OT_RADIO_SUBSTATE_RX_FRAME_ONGOING || sSubState == OT_RADIO_SUBSTATE_TX_ACK_RX_ONGOING );
 
     memcpy(&sReceiveMessage, aBuf, aBufLength);
@@ -266,12 +266,12 @@ void platformRadioRxDone(otInstance *aInstance, const uint8_t *aBuf, uint16_t aB
 
     if (sSubState == OT_RADIO_SUBSTATE_RX_FRAME_ONGOING && otMacFrameIsAckRequested(&sReceiveFrame))
     {
-        // wait exactly time AIFS before sending out the Ack.
+        // Need to send Ack. Wait exactly time AIFS before sending out the Ack.
         setRadioSubState(OT_RADIO_SUBSTATE_RX_AIFS_WAIT, OT_RADIO_AIFS_TIME_US);
     }
     else
     {
-        // cases of 1) no Ack is requested, or 2) in TOT_RADIO_SUBSTATE_TX_ACK_RX_ONGOING.
+        // either 1) no Ack is requested, or 2) in OT_RADIO_SUBSTATE_TX_ACK_RX_ONGOING.
         setRadioSubState(OT_RADIO_SUBSTATE_IFS_WAIT, OT_RADIO_SIFS_TIME_US); // TODO lifs
     }
 
