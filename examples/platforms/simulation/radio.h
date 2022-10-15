@@ -44,12 +44,14 @@ enum
     SIM_TX_POWER_DEFAULT_DBM           = 0,    // dBm
     kMinChannel                        = OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MIN,
     kMaxChannel                        = OT_RADIO_2P4GHZ_OQPSK_CHANNEL_MAX,
-    OT_RADIO_LIFS_TIME_US              = 40 * OT_RADIO_SYMBOL_TIME, // TODO use
+    OT_RADIO_LIFS_TIME_US              = 40 * OT_RADIO_SYMBOL_TIME,
     OT_RADIO_SIFS_TIME_US              = 12 * OT_RADIO_SYMBOL_TIME,
     OT_RADIO_AIFS_TIME_US              = 12 * OT_RADIO_SYMBOL_TIME,
     OT_RADIO_CCA_TIME_US               = 8 * OT_RADIO_SYMBOL_TIME,
-    OT_RADIO_TURNAROUND_TIME_US        = 40, // may differ per radio model.
-    OT_RADIO_MAX_ACK_WAIT_US           = (OT_RADIO_AIFS_TIME_US + (10 * OT_RADIO_SYMBOL_TIME))
+    OT_RADIO_TURNAROUND_TIME_US        = 40, // actual turnaround-time: may differ per radio model.
+    OT_RADIO_MAX_TURNAROUND_TIME_US    = 12 * OT_RADIO_SYMBOL_TIME,
+    OT_RADIO_MAX_ACK_WAIT_US           = (OT_RADIO_AIFS_TIME_US + (10 * OT_RADIO_SYMBOL_TIME)),
+    OT_RADIO_aMaxSifsFrameSize         = 18,
 };
 
 OT_TOOL_PACKED_BEGIN
