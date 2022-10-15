@@ -55,6 +55,7 @@ static RadioSubState sLastReportedSubState  = OT_RADIO_SUBSTATE_READY;
 static uint8_t       sLastReportedChannel = 0;
 static uint64_t      sLastReportedRadioEventTime = 0;
 static uint64_t      sNextRadioEventTime = 0;
+static uint64_t      sReceiveTimestamp = 0;
 static struct RadioCommEventData sLastTxEventData; // metadata about last/ongoing Tx action.
 static RadioSubState       sSubState = OT_RADIO_SUBSTATE_READY;
 
@@ -78,8 +79,8 @@ void radioReceive(otInstance *aInstance, otError aError)
 
     otEXPECT(sState == OT_RADIO_STATE_RECEIVE || sState == OT_RADIO_STATE_TRANSMIT);
 
-    // TODO replace by SFD timestamp
-    sReceiveFrame.mInfo.mRxInfo.mTimestamp = otPlatTimeGet();
+    // Record SFD timestamp.
+    sReceiveFrame.mInfo.mRxInfo.mTimestamp = sReceiveTimestamp;
 
     if (sTxWait && otMacFrameIsAckRequested(&sTransmitFrame))
     {
@@ -245,6 +246,7 @@ void platformRadioRxStart(otInstance *aInstance, struct RadioCommEventData *aRxP
     {
         setRadioSubState(OT_RADIO_SUBSTATE_RX_FRAME_ONGOING, aRxParams->mDuration + FAILSAFE_TIME_US);
     }
+    sReceiveTimestamp = otPlatTimeGet(); // record SFD timestamp.
 
 exit:
     return;
