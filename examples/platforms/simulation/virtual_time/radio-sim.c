@@ -50,14 +50,14 @@ static void setRadioSubState(RadioSubState aState, uint64_t timeToRemainInState)
 static void startCcaForTransmission(otInstance *aInstance);
 static void signalRadioTxDone(otInstance *aInstance, otRadioFrame *aFrame, otRadioFrame *aAckFrame, otError aError);
 
-static otRadioState  sLastReportedState   = OT_RADIO_STATE_DISABLED;
-static RadioSubState sLastReportedSubState  = OT_RADIO_SUBSTATE_READY;
-static uint8_t       sLastReportedChannel = 0;
+static otRadioState  sLastReportedState          = OT_RADIO_STATE_INVALID;
+static RadioSubState sLastReportedSubState       = OT_RADIO_SUBSTATE_INVALID;
+static uint8_t       sLastReportedChannel        = 0;
 static uint64_t      sLastReportedRadioEventTime = 0;
-static uint64_t      sNextRadioEventTime = 0;
-static uint64_t      sReceiveTimestamp = 0;
+static uint64_t      sNextRadioEventTime         = OT_RADIO_STARTUP_TIME_US;
+static uint64_t      sReceiveTimestamp           = 0;
+static RadioSubState sSubState                   = OT_RADIO_SUBSTATE_STARTUP;
 static struct RadioCommEventData sLastTxEventData; // metadata about last/ongoing Tx action.
-static RadioSubState       sSubState = OT_RADIO_SUBSTATE_READY;
 
 void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame)
 {
@@ -170,28 +170,11 @@ void setRadioState(otRadioState aState)
     {
         switch (aState) {
         case OT_RADIO_STATE_DISABLED:
-            // force the radio to stop, resetting substate.
-            setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
-            break;
-        case OT_RADIO_STATE_SLEEP:
-            // move naturally out of current substate. Allow AckTx/IFS/etc to conclude.
-            break;
-        case OT_RADIO_STATE_TRANSMIT:
-            if (sState == OT_RADIO_STATE_RECEIVE){
-                // let the substate naturally progress to READY, if not already there.
-            }else{
-                setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
-            }
-            break;
-        case OT_RADIO_STATE_RECEIVE:
-            if (sState == OT_RADIO_STATE_TRANSMIT){
-                // let the substate naturally progress to READY, if not already there.
-            }else{
-                setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
-            }
+            // force the radio to stop, resetting substate. Enabling again would take the startup time.
+            setRadioSubState(OT_RADIO_SUBSTATE_STARTUP, OT_RADIO_STARTUP_TIME_US);
             break;
         default:
-            assert("invalid state");
+            break;
         }
     }
     sState = aState;
@@ -348,7 +331,11 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
         uint64_t ifsTime = (sTransmitFrame.mLength > OT_RADIO_aMaxSifsFrameSize) ? OT_RADIO_LIFS_TIME_US : OT_RADIO_SIFS_TIME_US;
         switch (sSubState)
         {
-        case OT_RADIO_SUBSTATE_READY:  // initial substate: decide when to start transmitting frame.
+        case OT_RADIO_SUBSTATE_STARTUP: // when radio/node starts.
+            setRadioSubState(OT_RADIO_SUBSTATE_READY, UNDEFINED_TIME_US);
+            break;
+
+        case OT_RADIO_SUBSTATE_READY:  // ready/idle substate: decide when to start transmitting frame.
             if (platformRadioIsTransmitPending())
             {
                 setRadioSubState(OT_RADIO_SUBSTATE_TX_CCA, OT_RADIO_CCA_TIME_US + FAILSAFE_TIME_US);
