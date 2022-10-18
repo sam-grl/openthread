@@ -327,6 +327,14 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
     OT_UNUSED_VARIABLE(aReadFdSet);
     OT_UNUSED_VARIABLE(aWriteFdSet);
 
+    // if stack wants to transmit a frame while radio is busy receiving one: signal CCA failure directly.
+    // there is no need to sample the radio channel in this case. Also do not wait until the end of Rx period to
+    // signal the error, otherwise multiple radio nodes become sync'ed on their CCA period that would follow.
+    if (platformRadioIsTransmitPending() && sSubState == OT_RADIO_SUBSTATE_RX_FRAME_ONGOING )
+    {
+        signalRadioTxDone(aInstance, &sTransmitFrame, NULL, OT_ERROR_CHANNEL_ACCESS_FAILURE);
+    }
+
     // Tx/Rx state machine. Execute time and data based state transitions for substate.
     // Event based transitions are in functions called by platform-sim.c receiveEvent().
     if (otPlatTimeGet() >= sNextRadioEventTime)
@@ -427,7 +435,6 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
 
         default:
             assert(false && "Illegal state found");
-
         }
     }
 }
