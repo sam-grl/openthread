@@ -242,26 +242,29 @@ void platformRadioRxDone(otInstance *aInstance, const uint8_t *aBuf, uint16_t aB
 
     // only process in valid substates:
     otEXPECT( sSubState == OT_RADIO_SUBSTATE_RX_FRAME_ONGOING || sSubState == OT_RADIO_SUBSTATE_TX_ACK_RX_ONGOING );
-
     memcpy(&sReceiveMessage, aBuf, aBufLength);
 
     sReceiveFrame.mLength             = (uint8_t) aBufLength; // TODO check why not -1 here.
     sReceiveFrame.mInfo.mRxInfo.mRssi = aRxParams->mPower;
     sReceiveFrame.mInfo.mRxInfo.mLqi  = OT_RADIO_LQI_NONE; // No support of LQI reporting.
 
-    if (sSubState == OT_RADIO_SUBSTATE_RX_FRAME_ONGOING && otMacFrameIsAckRequested(&sReceiveFrame))
+    bool isAck = otMacFrameIsAck(&sReceiveFrame);
+    bool isAckRequested = otMacFrameIsAckRequested(&sReceiveFrame);
+    bool isAddressedToMe = otMacFrameDoesAddrMatch(&sReceiveFrame, sPanid, sShortAddress, &sExtAddress);
+
+    if (sSubState == OT_RADIO_SUBSTATE_RX_FRAME_ONGOING && isAckRequested && !isAck && isAddressedToMe)
     {
         // Rx, need to send Ack. Wait exactly time AIFS before sending out the Ack.
         setRadioSubState(OT_RADIO_SUBSTATE_RX_AIFS_WAIT, OT_RADIO_AIFS_TIME_US);
     }
-    else if (sSubState == OT_RADIO_SUBSTATE_RX_FRAME_ONGOING && !otMacFrameIsAckRequested(&sReceiveFrame))
+    else if (sSubState == OT_RADIO_SUBSTATE_RX_FRAME_ONGOING)
     {
         // Rx, no Ack is requested.
         setRadioSubState(OT_RADIO_SUBSTATE_IFS_WAIT, OT_RADIO_MAX_TURNAROUND_TIME_US);
     }
-    else
+    else if (sSubState == OT_RADIO_SUBSTATE_TX_ACK_RX_ONGOING)
     {
-        // Tx, in substate OT_RADIO_SUBSTATE_TX_ACK_RX_ONGOING.
+        // I was in Tx, and a frame (likely Ack, but maybe not) is received.
         uint64_t ifsTime = (sTransmitFrame.mLength > OT_RADIO_aMaxSifsFrameSize) ? OT_RADIO_LIFS_TIME_US : OT_RADIO_SIFS_TIME_US;
         setRadioSubState(OT_RADIO_SUBSTATE_IFS_WAIT, ifsTime);
     }
