@@ -337,7 +337,6 @@ otError otPlatRadioTransmit(otInstance *aInstance, otRadioFrame *aFrame)
     if (sState == OT_RADIO_STATE_RECEIVE)
     {
         error           = OT_ERROR_NONE;
-        sTxWait         = false;
         sCurrentChannel = aFrame->mChannel;
         setRadioState(OT_RADIO_STATE_TRANSMIT);
     }
