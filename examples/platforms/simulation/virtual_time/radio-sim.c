@@ -54,6 +54,7 @@ static otRadioState  sLastReportedState          = OT_RADIO_STATE_INVALID;
 static RadioSubState sLastReportedSubState       = OT_RADIO_SUBSTATE_INVALID;
 static uint8_t       sLastReportedChannel        = 0;
 static uint64_t      sLastReportedRadioEventTime = 0;
+static uint8_t       sOngoingOperationChannel    = kMinChannel;
 static uint64_t      sNextRadioEventTime         = OT_RADIO_STARTUP_TIME_US;
 static uint64_t      sReceiveTimestamp           = 0;
 static RadioSubState sSubState                   = OT_RADIO_SUBSTATE_STARTUP;
@@ -64,7 +65,7 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
     // ( 4B preamble + 1B SFD + 1B PHY header + MAC frame ) @250kbps
     uint64_t frameDurationUs = (6 + aFrame->mLength) * OT_RADIO_SYMBOLS_PER_OCTET * OT_RADIO_SYMBOL_TIME;
 
-    int8_t maxPower            = sChannelMaxTransmitPower[sCurrentChannel - kMinChannel];
+    int8_t maxPower            = sChannelMaxTransmitPower[aFrame->mChannel - kMinChannel];
     sLastTxEventData.mChannel  = aFrame->mChannel;
     sLastTxEventData.mPower    = sTxPower < maxPower ? sTxPower : maxPower;
     sLastTxEventData.mError    = OT_ERROR_NONE;
@@ -123,11 +124,11 @@ void platformRadioReportStateToSimulator()
 {
     struct RadioStateEventData stateReport;
 
-    if (sLastReportedState != sState || sLastReportedChannel != sCurrentChannel ||
+    if (sLastReportedState != sState || sLastReportedChannel != sOngoingOperationChannel ||
         sLastReportedSubState != sSubState || sLastReportedRadioEventTime != sNextRadioEventTime)
     {
         sLastReportedState    = sState;
-        sLastReportedChannel  = sCurrentChannel;
+        sLastReportedChannel  = sOngoingOperationChannel;
         sLastReportedSubState = sSubState;
         sLastReportedRadioEventTime = sNextRadioEventTime;
 
@@ -147,7 +148,7 @@ void platformRadioReportStateToSimulator()
             energyState = OT_RADIO_STATE_RECEIVE;
         }
 
-        stateReport.mChannel     = sCurrentChannel;
+        stateReport.mChannel     = sOngoingOperationChannel;
         stateReport.mEnergyState = energyState;
         stateReport.mSubState    = sSubState;
         stateReport.mTxPower     = sTxPower;
@@ -215,7 +216,7 @@ void platformRadioRxStart(otInstance *aInstance, struct RadioCommEventData *aRxP
 {
     OT_UNUSED_VARIABLE(aInstance);
 
-    otEXPECT(sCurrentChannel == aRxParams->mChannel); // must be on my listening channel.
+    otEXPECT(sOngoingOperationChannel == aRxParams->mChannel); // must be on my listening channel.
     otEXPECT(sState == OT_RADIO_STATE_RECEIVE || sState == OT_RADIO_STATE_TRANSMIT); // and in valid states.
     otEXPECT(sSubState == OT_RADIO_SUBSTATE_READY || sSubState == OT_RADIO_SUBSTATE_IFS_WAIT ||
              sSubState == OT_RADIO_SUBSTATE_TX_AIFS_WAIT);
@@ -347,6 +348,7 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
             break;
 
         case OT_RADIO_SUBSTATE_READY:  // ready/idle substate: decide when to start transmitting frame.
+            sOngoingOperationChannel = sCurrentChannel;
             if (platformRadioIsTransmitPending())
             {
                 setRadioSubState(OT_RADIO_SUBSTATE_TX_CCA, OT_RADIO_CCA_TIME_US + FAILSAFE_TIME_US);
