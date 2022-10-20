@@ -50,7 +50,7 @@
 
 #include "utils/uart.h"
 
-uint32_t gNodeId        = 1;
+uint32_t gNodeId           = 1;
 uint64_t gLastAlarmEventId = 0;
 
 extern bool          gPlatformPseudoResetWasRequested;

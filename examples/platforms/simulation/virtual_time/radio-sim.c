@@ -54,9 +54,9 @@ void radioPrepareAck(void);
 bool IsTimeAfterOrEqual(uint32_t aTimeA, uint32_t aTimeB);
 void radioProcessFrame(otInstance *aInstance, otError aError);
 
-extern int8_t   sEnergyScanResult  ;
-extern bool     sEnergyScanning    ;
-extern uint32_t sEnergyScanEndTime ;
+extern int8_t   sEnergyScanResult;
+extern bool     sEnergyScanning;
+extern uint32_t sEnergyScanEndTime;
 
 extern otRadioState        sState;
 extern struct RadioMessage sReceiveMessage;
@@ -70,14 +70,11 @@ extern otExtAddress   sExtAddress;
 extern otShortAddress sShortAddress;
 extern otPanId        sPanid;
 extern bool           sPromiscuous;
-extern bool           sTxWait     ;
-extern int8_t         sTxPower    ;
+extern bool           sTxWait;
+extern int8_t         sTxPower;
 extern int8_t         sCcaEdThresh;
-extern int8_t         sLnaGain   ;
-extern uint16_t       sRegionCode;
 extern int8_t         sChannelMaxTransmitPower[kMaxChannel - kMinChannel + 1];
-extern uint8_t        sCurrentChannel ;
-extern bool           sSrcMatchEnabled;
+extern uint8_t        sCurrentChannel;
 
 
 // declaration of radio functions only locally used for virtual-time radio
