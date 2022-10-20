@@ -67,34 +67,34 @@ static uint16_t sPort       = 0;
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME
 
 // Definition of both real/virtual-time mode variables
-static int8_t   sEnergyScanResult  = OT_RADIO_RSSI_INVALID;
-static bool     sEnergyScanning    = false;
-static uint32_t sEnergyScanEndTime = 0;
+int8_t   sEnergyScanResult  = OT_RADIO_RSSI_INVALID;
+bool     sEnergyScanning    = false;
+uint32_t sEnergyScanEndTime = 0;
 
-static otRadioState        sState = OT_RADIO_STATE_DISABLED;
-static struct RadioMessage sReceiveMessage;
-static struct RadioMessage sTransmitMessage;
-static struct RadioMessage sAckMessage;
-static otRadioFrame        sReceiveFrame;
-static otRadioFrame        sTransmitFrame;
-static otRadioFrame        sAckFrame;
+otRadioState        sState = OT_RADIO_STATE_DISABLED;
+struct RadioMessage sReceiveMessage;
+struct RadioMessage sTransmitMessage;
+struct RadioMessage sAckMessage;
+otRadioFrame        sReceiveFrame;
+otRadioFrame        sTransmitFrame;
+otRadioFrame        sAckFrame;
 
 #if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
 static otRadioIeInfo sTransmitIeInfo;
 #endif
 
-static otExtAddress   sExtAddress;
-static otShortAddress sShortAddress;
-static otPanId        sPanid;
-static bool           sPromiscuous = false;
-static bool           sTxWait      = false;
-static int8_t         sTxPower     = SIM_TX_POWER_DEFAULT_DBM;
-static int8_t         sCcaEdThresh = SIM_CCA_ED_THRESHOLD_DEFAULT_DBM;
-static int8_t         sLnaGain     = 0;
-static uint16_t       sRegionCode  = 0;
-static int8_t         sChannelMaxTransmitPower[kMaxChannel - kMinChannel + 1];
-static uint8_t        sCurrentChannel = kMinChannel;
-static bool           sSrcMatchEnabled = false;
+otExtAddress   sExtAddress;
+otShortAddress sShortAddress;
+otPanId        sPanid;
+bool           sPromiscuous = false;
+bool           sTxWait      = false;
+int8_t         sTxPower     = SIM_TX_POWER_DEFAULT_DBM;
+int8_t         sCcaEdThresh = SIM_CCA_ED_THRESHOLD_DEFAULT_DBM;
+int8_t         sLnaGain     = 0;
+uint16_t       sRegionCode  = 0;
+int8_t         sChannelMaxTransmitPower[kMaxChannel - kMinChannel + 1];
+uint8_t        sCurrentChannel  = kMinChannel;
+bool           sSrcMatchEnabled = false;
 
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
 static uint8_t sAckIeData[OT_ACK_IE_MAX_SIZE];
@@ -1283,9 +1283,6 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
     }
 }
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
-
-// include the virtual-time radio functions; only active if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 1
-#include "virtual_time/radio-sim.c"
 
 void parseFromEnvAsUint16(const char *aEnvName, uint16_t *aValue)
 {

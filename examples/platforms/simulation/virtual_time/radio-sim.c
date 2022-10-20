@@ -36,6 +36,7 @@
 #include <stdio.h>
 
 #include <openthread/platform/alarm-milli.h>
+#include <openthread/platform/diag.h>
 #include <openthread/platform/radio.h>
 #include <openthread/platform/time.h>
 
@@ -44,6 +45,40 @@
 #include "utils/soft_source_match_table.h"
 
 #define FAILSAFE_TIME_US 4
+
+// Declaration of radio functions
+void radioSendMessage(otInstance *aInstance);
+void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame);
+void setRadioState(otRadioState aState);
+void radioPrepareAck(void);
+bool IsTimeAfterOrEqual(uint32_t aTimeA, uint32_t aTimeB);
+void radioProcessFrame(otInstance *aInstance, otError aError);
+
+extern int8_t   sEnergyScanResult  ;
+extern bool     sEnergyScanning    ;
+extern uint32_t sEnergyScanEndTime ;
+
+extern otRadioState        sState;
+extern struct RadioMessage sReceiveMessage;
+extern struct RadioMessage sTransmitMessage;
+extern struct RadioMessage sAckMessage;
+extern otRadioFrame        sReceiveFrame;
+extern otRadioFrame        sTransmitFrame;
+extern otRadioFrame        sAckFrame;
+
+extern otExtAddress   sExtAddress;
+extern otShortAddress sShortAddress;
+extern otPanId        sPanid;
+extern bool           sPromiscuous;
+extern bool           sTxWait     ;
+extern int8_t         sTxPower    ;
+extern int8_t         sCcaEdThresh;
+extern int8_t         sLnaGain   ;
+extern uint16_t       sRegionCode;
+extern int8_t         sChannelMaxTransmitPower[kMaxChannel - kMinChannel + 1];
+extern uint8_t        sCurrentChannel ;
+extern bool           sSrcMatchEnabled;
+
 
 // declaration of radio functions only locally used for virtual-time radio
 static void setRadioSubState(RadioSubState aState, uint64_t timeToRemainInState);
@@ -120,7 +155,7 @@ static void signalRadioTxDone(otInstance *aInstance, otRadioFrame *aFrame, otRad
     }
 }
 
-void platformRadioReportStateToSimulator()
+void platformRadioReportStateToSimulator(void)
 {
     struct RadioStateEventData stateReport;
 
@@ -135,11 +170,7 @@ void platformRadioReportStateToSimulator()
         // determine the energy-state from subState. Only in very particular substates,
         // the radio is actively transmitting.
         uint8_t energyState = sState;
-        if ( sSubState == OT_RADIO_SUBSTATE_TX_FRAME_ONGOING)
-        {
-             energyState = OT_RADIO_STATE_TRANSMIT;
-        }
-        else if ( sSubState == OT_RADIO_SUBSTATE_RX_ACK_TX_ONGOING)
+        if ( sSubState == OT_RADIO_SUBSTATE_TX_FRAME_ONGOING || sSubState == OT_RADIO_SUBSTATE_RX_ACK_TX_ONGOING)
         {
             energyState = OT_RADIO_STATE_TRANSMIT;
         }
@@ -167,16 +198,10 @@ void platformRadioReportStateToSimulator()
 
 void setRadioState(otRadioState aState)
 {
-    if (aState != sState)
+    if (aState != sState && aState == OT_RADIO_STATE_DISABLED)
     {
-        switch (aState) {
-        case OT_RADIO_STATE_DISABLED:
-            // force the radio to stop, resetting substate. Enabling again would take the startup time.
-            setRadioSubState(OT_RADIO_SUBSTATE_STARTUP, OT_RADIO_STARTUP_TIME_US);
-            break;
-        default:
-            break;
-        }
+        // force the radio to stop, resetting substate. Enabling again would take the startup time.
+        setRadioSubState(OT_RADIO_SUBSTATE_STARTUP, OT_RADIO_STARTUP_TIME_US);
     }
     sState = aState;
 }

@@ -75,6 +75,7 @@ add_library(openthread-simulation
     virtual_time/alarm-sim.c
     virtual_time/platform-sim.c
     virtual_time/event-sim.c
+    virtual_time/radio-sim.c
     $<TARGET_OBJECTS:openthread-platform-utils>
 )
 
