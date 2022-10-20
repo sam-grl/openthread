@@ -46,6 +46,12 @@
 
 using namespace ot;
 
+// Note: We support the following scenrios:
+// - Using OpenThread's routing manager, while using external NAT64 translator (like tayga).
+// - Using OpenThread's NAT64 translator, while using external routing manager.
+// So OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE translator and OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE are two
+// separate build flags and they are not depending on each other.
+
 #if OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE
 otError otNat64SetIp4Cidr(otInstance *aInstance, const otIp4Cidr *aCidr)
 {
@@ -66,7 +72,63 @@ void otNat64SetReceiveIp4Callback(otInstance *aInstance, otNat64ReceiveIp4Callba
 {
     AsCoreType(aInstance).Get<Ip6::Ip6>().SetNat64ReceiveIp4DatagramCallback(aCallback, aContext);
 }
+
+void otNat64InitAddressMappingIterator(otInstance *aInstance, otNat64AddressMappingIterator *aIterator)
+{
+    AssertPointerIsNotNull(aIterator);
+
+    AsCoreType(aInstance).Get<Nat64::Translator>().InitAddressMappingIterator(*aIterator);
+}
+
+otError otNat64GetNextAddressMapping(otInstance *                   aInstance,
+                                     otNat64AddressMappingIterator *aIterator,
+                                     otNat64AddressMapping *        aMapping)
+{
+    AssertPointerIsNotNull(aIterator);
+    AssertPointerIsNotNull(aMapping);
+
+    return AsCoreType(aInstance).Get<Nat64::Translator>().GetNextAddressMapping(*aIterator, *aMapping);
+}
+
+void otNat64GetCounters(otInstance *aInstance, otNat64ProtocolCounters *aCounters)
+{
+    AsCoreType(aInstance).Get<Nat64::Translator>().GetCounters(AsCoreType(aCounters));
+}
+
+void otNat64GetErrorCounters(otInstance *aInstance, otNat64ErrorCounters *aCounters)
+{
+    AsCoreType(aInstance).Get<Nat64::Translator>().GetErrorCounters(AsCoreType(aCounters));
+}
+
+otError otNat64GetCidr(otInstance *aInstance, otIp4Cidr *aCidr)
+{
+    return AsCoreType(aInstance).Get<Nat64::Translator>().GetIp4Cidr(AsCoreType(aCidr));
+}
+
+otNat64State otNat64GetTranslatorState(otInstance *aInstance)
+{
+    return MapEnum(AsCoreType(aInstance).Get<Nat64::Translator>().GetState());
+}
 #endif // OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE
+
+#if OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE
+otNat64State otNat64GetPrefixManagerState(otInstance *aInstance)
+{
+    return MapEnum(AsCoreType(aInstance).Get<BorderRouter::RoutingManager>().GetNat64PrefixManagerState());
+}
+#endif
+
+#if OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE || OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE
+void otNat64SetEnabled(otInstance *aInstance, bool aEnabled)
+{
+#if OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE
+    AsCoreType(aInstance).Get<BorderRouter::RoutingManager>().SetNat64PrefixManagerEnabled(aEnabled);
+#endif
+#if OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE
+    AsCoreType(aInstance).Get<Nat64::Translator>().SetEnabled(aEnabled);
+#endif
+}
+#endif // OPENTHREAD_CONFIG_NAT64_TRANSLATOR_ENABLE || OPENTHREAD_CONFIG_NAT64_BORDER_ROUTING_ENABLE
 
 bool otIp4IsAddressEqual(const otIp4Address *aFirst, const otIp4Address *aSecond)
 {
@@ -76,4 +138,37 @@ bool otIp4IsAddressEqual(const otIp4Address *aFirst, const otIp4Address *aSecond
 void otIp4ExtractFromIp6Address(uint8_t aPrefixLength, const otIp6Address *aIp6Address, otIp4Address *aIp4Address)
 {
     AsCoreType(aIp4Address).ExtractFromIp6Address(aPrefixLength, AsCoreType(aIp6Address));
+}
+
+otError otIp4AddressFromString(const char *aString, otIp4Address *aAddress)
+{
+    AssertPointerIsNotNull(aString);
+    return AsCoreType(aAddress).FromString(aString);
+}
+
+otError otNat64SynthesizeIp6Address(otInstance *aInstance, const otIp4Address *aIp4Address, otIp6Address *aIp6Address)
+{
+    otError                          err = OT_ERROR_NONE;
+    NetworkData::ExternalRouteConfig nat64Prefix;
+
+    VerifyOrExit(AsCoreType(aInstance).Get<NetworkData::Leader>().GetPreferredNat64Prefix(nat64Prefix) == OT_ERROR_NONE,
+                 err = OT_ERROR_INVALID_STATE);
+    AsCoreType(aIp6Address).SynthesizeFromIp4Address(nat64Prefix.GetPrefix(), AsCoreType(aIp4Address));
+
+exit:
+    return err;
+}
+
+void otIp4AddressToString(const otIp4Address *aAddress, char *aBuffer, uint16_t aSize)
+{
+    AssertPointerIsNotNull(aBuffer);
+
+    AsCoreType(aAddress).ToString(aBuffer, aSize);
+}
+
+void otIp4CidrToString(const otIp4Cidr *aCidr, char *aBuffer, uint16_t aSize)
+{
+    AssertPointerIsNotNull(aBuffer);
+
+    AsCoreType(aCidr).ToString(aBuffer, aSize);
 }

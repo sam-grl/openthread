@@ -61,6 +61,7 @@ char **gArguments      = NULL;
 
 uint64_t sNow = 0; // microseconds
 int      sSockFd;
+uint16_t sPortBase = 9000;
 uint16_t sPortOffset;
 
 static void handleSignal(int aSignal)
@@ -71,6 +72,7 @@ static void handleSignal(int aSignal)
 }
 
 #define VERIFY_EVENT_SIZE(X) assert( (payloadLen >= sizeof(X)) && "received event payload too small" );
+
 static void receiveEvent(otInstance *aInstance)
 {
     struct Event event;
@@ -165,28 +167,15 @@ otError otPlatUartFlush(void)
 static void socket_init(void)
 {
     struct sockaddr_in sockaddr;
-    char *             offset;
     memset(&sockaddr, 0, sizeof(sockaddr));
     sockaddr.sin_family = AF_INET;
 
-    offset = getenv("PORT_OFFSET");
+    parseFromEnvAsUint16("PORT_BASE", &sPortBase);
 
-    if (offset)
-    {
-        char *endptr;
+    parseFromEnvAsUint16("PORT_OFFSET", &sPortOffset);
+    sPortOffset *= (MAX_NETWORK_SIZE + 1);
 
-        sPortOffset = (uint16_t)strtol(offset, &endptr, 0);
-
-        if (*endptr != '\0')
-        {
-            fprintf(stderr, "Invalid PORT_OFFSET: %s\n", offset);
-            exit(EXIT_FAILURE);
-        }
-
-        sPortOffset *= (OPENTHREAD_SIMULATION_MAX_NETWORK_SIZE + 1);
-    }
-
-    sockaddr.sin_port        = htons((uint16_t)(9000 + sPortOffset + gNodeId));
+    sockaddr.sin_port        = htons((uint16_t)(sPortBase + sPortOffset + gNodeId));
     sockaddr.sin_addr.s_addr = INADDR_ANY;
 
     sSockFd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
@@ -228,9 +217,9 @@ void otSysInit(int argc, char *argv[])
 
     gNodeId = (uint32_t)strtol(argv[1], &endptr, 0);
 
-    if (*endptr != '\0' || gNodeId < 1 || gNodeId > OPENTHREAD_SIMULATION_MAX_NETWORK_SIZE)
+    if (*endptr != '\0' || gNodeId < 1 || gNodeId > MAX_NETWORK_SIZE)
     {
-        fprintf(stderr, "Invalid NodeId: %s (must be 1-%i)\n", argv[1], OPENTHREAD_SIMULATION_MAX_NETWORK_SIZE);
+        fprintf(stderr, "Invalid NodeId: %s (must be 1-%i)\n", argv[1], MAX_NETWORK_SIZE);
         exit(EXIT_FAILURE);
     }
 

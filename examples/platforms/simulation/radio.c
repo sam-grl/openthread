@@ -58,10 +58,10 @@ void radioProcessFrame(otInstance *aInstance, otError aError);
 static uint8_t generateAckIeData(uint8_t *aLinkMetricsIeData, uint8_t aLinkMetricsIeDataLen);
 #endif
 
-// Definition of non-virtual time ('real' mode) variables
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
 static int      sTxFd       = -1;
 static int      sRxFd       = -1;
+static uint16_t sPortBase   = 9000;
 static uint16_t sPortOffset = 0;
 static uint16_t sPort       = 0;
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME
@@ -123,6 +123,75 @@ static otMacKeyMaterial sPrevKey;
 static otMacKeyMaterial sCurrKey;
 static otMacKeyMaterial sNextKey;
 static otRadioKeyType   sKeyType;
+
+#if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
+static uint8_t sDeniedNodeIdsBitVector[(MAX_NETWORK_SIZE + 7) / 8];
+
+static bool NodeIdFilterIsConnectable(uint16_t aNodeId)
+{
+    uint16_t index = aNodeId - 1;
+
+    return (sDeniedNodeIdsBitVector[index / 8] & (0x80 >> (index % 8))) == 0;
+}
+
+static void NodeIdFilterDeny(uint16_t aNodeId)
+{
+    uint16_t index = aNodeId - 1;
+
+    sDeniedNodeIdsBitVector[index / 8] |= 0x80 >> (index % 8);
+}
+
+static void NodeIdFilterClear(void)
+{
+    memset(sDeniedNodeIdsBitVector, 0, sizeof(sDeniedNodeIdsBitVector));
+}
+
+otError ProcessNodeIdFilter(void *aContext, uint8_t aArgsLength, char *aArgs[])
+{
+    OT_UNUSED_VARIABLE(aContext);
+
+    otError error = OT_ERROR_NONE;
+
+    otEXPECT_ACTION(aArgsLength > 0, error = OT_ERROR_INVALID_COMMAND);
+
+    if (!strcmp(aArgs[0], "clear"))
+    {
+        otEXPECT_ACTION(aArgsLength == 1, error = OT_ERROR_INVALID_ARGS);
+
+        NodeIdFilterClear();
+    }
+    else if (!strcmp(aArgs[0], "deny"))
+    {
+        uint16_t nodeId;
+        char *   endptr;
+
+        otEXPECT_ACTION(aArgsLength == 2, error = OT_ERROR_INVALID_ARGS);
+
+        nodeId = (uint16_t)strtol(aArgs[1], &endptr, 0);
+
+        otEXPECT_ACTION(*endptr == '\0', error = OT_ERROR_INVALID_ARGS);
+        otEXPECT_ACTION(1 <= nodeId && nodeId <= MAX_NETWORK_SIZE, error = OT_ERROR_INVALID_ARGS);
+
+        NodeIdFilterDeny(nodeId);
+    }
+    else
+    {
+        error = OT_ERROR_INVALID_COMMAND;
+    }
+
+exit:
+    return error;
+}
+#else
+otError ProcessNodeIdFilter(void *aContext, uint8_t aArgsLength, char *aArgs[])
+{
+    OT_UNUSED_VARIABLE(aContext);
+    OT_UNUSED_VARIABLE(aArgsLength);
+    OT_UNUSED_VARIABLE(aArgs);
+
+    return OT_ERROR_NOT_IMPLEMENTED;
+}
+#endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
 
 bool IsTimeAfterOrEqual(uint32_t aTimeA, uint32_t aTimeB)
 {
@@ -245,6 +314,38 @@ void otPlatRadioSetPromiscuous(otInstance *aInstance, bool aEnable)
     assert(aInstance != NULL);
 
     sPromiscuous = aEnable;
+}
+
+void platformRadioInit(void)
+{
+#if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
+    parseFromEnvAsUint16("PORT_BASE", &sPortBase);
+
+    parseFromEnvAsUint16("PORT_OFFSET", &sPortOffset);
+    sPortOffset *= (MAX_NETWORK_SIZE + 1);
+
+    initFds();
+#endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
+
+    sReceiveFrame.mPsdu  = sReceiveMessage.mPsdu;
+    sTransmitFrame.mPsdu = sTransmitMessage.mPsdu;
+    sAckFrame.mPsdu      = sAckMessage.mPsdu;
+
+#if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
+    sTransmitFrame.mInfo.mTxInfo.mIeInfo = &sTransmitIeInfo;
+#else
+    sTransmitFrame.mInfo.mTxInfo.mIeInfo = NULL;
+#endif
+
+    for (size_t i = 0; i <= kMaxChannel - kMinChannel; i++)
+    {
+        sChannelMaxTransmitPower[i] = OT_RADIO_POWER_INVALID;
+    }
+    sReceiveFrame.mInfo.mRxInfo.mRssi = OT_RADIO_RSSI_INVALID;
+
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
+    otLinkMetricsInit(SIM_RECEIVE_SENSITIVITY);
+#endif
 }
 
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
@@ -699,52 +800,6 @@ exit:
     }
 }
 
-void platformRadioInit(void)
-{
-#if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
-    char *offset;
-
-    offset = getenv("PORT_OFFSET");
-
-    if (offset)
-    {
-        char *endptr;
-
-        sPortOffset = (uint16_t)strtol(offset, &endptr, 0);
-
-        if (*endptr != '\0')
-        {
-            fprintf(stderr, "Invalid PORT_OFFSET: %s\n", offset);
-            exit(EXIT_FAILURE);
-        }
-
-        sPortOffset *= (MAX_NETWORK_SIZE + 1);
-    }
-
-    initFds();
-#endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
-
-    sReceiveFrame.mPsdu  = sReceiveMessage.mPsdu;
-    sTransmitFrame.mPsdu = sTransmitMessage.mPsdu;
-    sAckFrame.mPsdu      = sAckMessage.mPsdu;
-
-#if OPENTHREAD_CONFIG_MAC_HEADER_IE_SUPPORT
-    sTransmitFrame.mInfo.mTxInfo.mIeInfo = &sTransmitIeInfo;
-#else
-    sTransmitFrame.mInfo.mTxInfo.mIeInfo = NULL;
-#endif
-
-    for (size_t i = 0; i <= kMaxChannel - kMinChannel; i++)
-    {
-        sChannelMaxTransmitPower[i] = OT_RADIO_POWER_INVALID;
-    }
-    sReceiveFrame.mInfo.mRxInfo.mRssi = OT_RADIO_RSSI_INVALID;
-
-#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
-    otLinkMetricsInit(SIM_RECEIVE_SENSITIVITY_DBM);
-#endif
-}
-
 bool platformRadioIsTransmitPending(void)
 {
     return sState == OT_RADIO_STATE_TRANSMIT && !sTxWait;
@@ -1046,7 +1101,7 @@ static void initFds(void)
 
     otEXPECT_ACTION((fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) != -1, perror("socket(sTxFd)"));
 
-    sPort                    = (uint16_t)(9000 + sPortOffset + gNodeId);
+    sPort                    = (uint16_t)(sPortBase + sPortOffset + gNodeId);
     sockaddr.sin_family      = AF_INET;
     sockaddr.sin_port        = htons(sPort);
     sockaddr.sin_addr.s_addr = inet_addr("127.0.0.1");
@@ -1085,7 +1140,7 @@ static void initFds(void)
     }
 
     sockaddr.sin_family      = AF_INET;
-    sockaddr.sin_port        = htons((uint16_t)(9000 + sPortOffset));
+    sockaddr.sin_port        = htons((uint16_t)(sPortBase + sPortOffset));
     sockaddr.sin_addr.s_addr = inet_addr(OT_RADIO_GROUP);
 
     otEXPECT_ACTION(bind(fd, (struct sockaddr *)&sockaddr, sizeof(sockaddr)) != -1, perror("bind(sRxFd)"));
@@ -1104,13 +1159,12 @@ void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFr
 {
     ssize_t            rval;
     struct sockaddr_in sockaddr;
-    OT_UNUSED_VARIABLE(isAck);
 
     memset(&sockaddr, 0, sizeof(sockaddr));
     sockaddr.sin_family = AF_INET;
     inet_pton(AF_INET, OT_RADIO_GROUP, &sockaddr.sin_addr);
 
-    sockaddr.sin_port = htons((uint16_t)(9000 + sPortOffset));
+    sockaddr.sin_port = htons((uint16_t)(sPortBase + sPortOffset));
     rval =
         sendto(sTxFd, (const char *)aMessage, 1 + aFrame->mLength, 0, (struct sockaddr *)&sockaddr, sizeof(sockaddr));
 
@@ -1232,3 +1286,21 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
 
 // include the virtual-time radio functions; only active if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 1
 #include "virtual_time/radio-sim.c"
+
+void parseFromEnvAsUint16(const char *aEnvName, uint16_t *aValue)
+{
+    char *env = getenv(aEnvName);
+
+    if (env)
+    {
+        char *endptr;
+
+        *aValue = (uint16_t)strtol(env, &endptr, 0);
+
+        if (*endptr != '\0')
+        {
+            fprintf(stderr, "Invalid %s: %s\n", aEnvName, env);
+            exit(EXIT_FAILURE);
+        }
+    }
+}

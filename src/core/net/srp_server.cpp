@@ -88,14 +88,17 @@ Server::Server(Instance &aInstance)
     , mSocket(aInstance)
     , mServiceUpdateHandler(nullptr)
     , mServiceUpdateHandlerContext(nullptr)
-    , mLeaseTimer(aInstance, HandleLeaseTimer)
-    , mOutstandingUpdatesTimer(aInstance, HandleOutstandingUpdatesTimer)
+    , mLeaseTimer(aInstance)
+    , mOutstandingUpdatesTimer(aInstance)
     , mServiceUpdateId(Random::NonCrypto::GetUint32())
     , mPort(kUdpPortMin)
     , mState(kStateDisabled)
     , mAddressMode(kDefaultAddressMode)
     , mAnycastSequenceNumber(0)
     , mHasRegisteredAnyService(false)
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+    , mAutoEnable(false)
+#endif
 {
     IgnoreError(SetDomain(kDefaultDomain));
 }
@@ -134,40 +137,70 @@ exit:
 
 void Server::SetEnabled(bool aEnabled)
 {
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+    mAutoEnable = false;
+#endif
+
     if (aEnabled)
     {
-        VerifyOrExit(mState == kStateDisabled);
-        mState = kStateStopped;
-
-        // Request publishing of "DNS/SRP Address Service" entry in the
-        // Thread Network Data based of `mAddressMode`. Then wait for
-        // callback `HandleNetDataPublisherEntryChange()` from the
-        // `Publisher` to start the SRP server.
-
-        switch (mAddressMode)
-        {
-        case kAddressModeUnicast:
-            SelectPort();
-            Get<NetworkData::Publisher>().PublishDnsSrpServiceUnicast(mPort);
-            break;
-
-        case kAddressModeAnycast:
-            mPort = kAnycastAddressModePort;
-            Get<NetworkData::Publisher>().PublishDnsSrpServiceAnycast(mAnycastSequenceNumber);
-            break;
-        }
+        Enable();
     }
     else
     {
-        VerifyOrExit(mState != kStateDisabled);
-        Get<NetworkData::Publisher>().UnpublishDnsSrpService();
-        Stop();
-        mState = kStateDisabled;
+        Disable();
+    }
+}
+
+void Server::Enable(void)
+{
+    VerifyOrExit(mState == kStateDisabled);
+    mState = kStateStopped;
+
+    // Request publishing of "DNS/SRP Address Service" entry in the
+    // Thread Network Data based of `mAddressMode`. Then wait for
+    // callback `HandleNetDataPublisherEntryChange()` from the
+    // `Publisher` to start the SRP server.
+
+    switch (mAddressMode)
+    {
+    case kAddressModeUnicast:
+        SelectPort();
+        Get<NetworkData::Publisher>().PublishDnsSrpServiceUnicast(mPort);
+        break;
+
+    case kAddressModeAnycast:
+        mPort = kAnycastAddressModePort;
+        Get<NetworkData::Publisher>().PublishDnsSrpServiceAnycast(mAnycastSequenceNumber);
+        break;
     }
 
 exit:
     return;
 }
+
+void Server::Disable(void)
+{
+    VerifyOrExit(mState != kStateDisabled);
+    Get<NetworkData::Publisher>().UnpublishDnsSrpService();
+    Stop();
+    mState = kStateDisabled;
+
+exit:
+    return;
+}
+
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+void Server::SetAutoEnableMode(bool aEnabled)
+{
+    VerifyOrExit(mAutoEnable != aEnabled);
+    mAutoEnable = aEnabled;
+
+    Get<BorderRouter::RoutingManager>().HandleSrpServerAutoEnableMode();
+
+exit:
+    return;
+}
+#endif
 
 Server::TtlConfig::TtlConfig(void)
 {
@@ -565,7 +598,7 @@ void Server::PrepareSocket(void)
 
     VerifyOrExit(!mSocket.IsOpen());
     SuccessOrExit(error = mSocket.Open(HandleUdpReceive, this));
-    error = mSocket.Bind(mPort, OT_NETIF_THREAD);
+    error = mSocket.Bind(mPort, Ip6::kNetifThread);
 
 exit:
     if (error != kErrorNone)
@@ -1296,6 +1329,48 @@ exit:
 
 void Server::InformUpdateHandlerOrCommit(Error aError, Host &aHost, const MessageMetadata &aMetadata)
 {
+#if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_INFO)
+    if (aError == kErrorNone)
+    {
+        uint8_t             numAddrs;
+        const Ip6::Address *addrs;
+
+        LogInfo("Processed DNS update info");
+        LogInfo("    Host:%s", aHost.GetFullName());
+        LogInfo("    Lease:%u, key-lease:%u, ttl:%u", aHost.GetLease(), aHost.GetKeyLease(), aHost.GetTtl());
+
+        addrs = aHost.GetAddresses(numAddrs);
+
+        if (numAddrs == 0)
+        {
+            LogInfo("    No host address");
+        }
+        else
+        {
+            LogInfo("    %d host address(es):", numAddrs);
+
+            for (; numAddrs > 0; addrs++, numAddrs--)
+            {
+                LogInfo("      %s", addrs->ToString().AsCString());
+            }
+        }
+
+        for (const Service &service : aHost.GetServices())
+        {
+            char subLabel[Dns::Name::kMaxLabelSize];
+
+            IgnoreError(service.GetServiceSubTypeLabel(subLabel, sizeof(subLabel)));
+
+            LogInfo("    %s service '%s'%s%s", service.IsDeleted() ? "Deleting" : "Adding", service.GetInstanceName(),
+                    service.IsSubType() ? " subtype:" : "", subLabel);
+        }
+    }
+    else
+    {
+        LogInfo("Error %s processing received DNS update", ErrorToString(aError));
+    }
+#endif // OT_SHOULD_LOG_AT(OT_LOG_LEVEL_INFO)
+
     if ((aError == kErrorNone) && (mServiceUpdateHandler != nullptr))
     {
         UpdateMetadata *update = UpdateMetadata::Allocate(GetInstance(), aHost, aMetadata);
@@ -1453,11 +1528,6 @@ exit:
     return error;
 }
 
-void Server::HandleLeaseTimer(Timer &aTimer)
-{
-    aTimer.Get<Server>().HandleLeaseTimer();
-}
-
 void Server::HandleLeaseTimer(void)
 {
     TimeMilli now                = TimerMilli::GetNow();
@@ -1572,11 +1642,6 @@ void Server::HandleLeaseTimer(void)
     }
 }
 
-void Server::HandleOutstandingUpdatesTimer(Timer &aTimer)
-{
-    aTimer.Get<Server>().HandleOutstandingUpdatesTimer();
-}
-
 void Server::HandleOutstandingUpdatesTimer(void)
 {
     while (!mOutstandingUpdates.IsEmpty() && mOutstandingUpdates.GetTail()->GetExpireTime() <= TimerMilli::GetNow())
@@ -1685,13 +1750,22 @@ TimeMilli Server::Service::GetKeyExpireTime(void) const
 void Server::Service::GetLeaseInfo(LeaseInfo &aLeaseInfo) const
 {
     TimeMilli now           = TimerMilli::GetNow();
-    TimeMilli expireTime    = GetExpireTime();
     TimeMilli keyExpireTime = GetKeyExpireTime();
 
     aLeaseInfo.mLease             = Time::SecToMsec(GetLease());
     aLeaseInfo.mKeyLease          = Time::SecToMsec(GetKeyLease());
-    aLeaseInfo.mRemainingLease    = (now <= expireTime) ? (expireTime - now) : 0;
     aLeaseInfo.mRemainingKeyLease = (now <= keyExpireTime) ? (keyExpireTime - now) : 0;
+
+    if (!mIsDeleted)
+    {
+        TimeMilli expireTime = GetExpireTime();
+
+        aLeaseInfo.mRemainingLease = (now <= expireTime) ? (expireTime - now) : 0;
+    }
+    else
+    {
+        aLeaseInfo.mRemainingLease = 0;
+    }
 }
 
 bool Server::Service::MatchesInstanceName(const char *aInstanceName) const
@@ -1740,7 +1814,7 @@ void Server::Service::Log(Action aAction) const
         "Update existing",           // (1) kUpdateExisting
         "Remove but retain name of", // (2) kRemoveButRetainName
         "Fully remove",              // (3) kFullyRemove
-        "LEASE expired for ",        // (4) kLeaseExpired
+        "LEASE expired for",         // (4) kLeaseExpired
         "KEY LEASE expired for",     // (5) kKeyLeaseExpired
     };
 
@@ -1899,13 +1973,22 @@ TimeMilli Server::Host::GetKeyExpireTime(void) const
 void Server::Host::GetLeaseInfo(LeaseInfo &aLeaseInfo) const
 {
     TimeMilli now           = TimerMilli::GetNow();
-    TimeMilli expireTime    = GetExpireTime();
     TimeMilli keyExpireTime = GetKeyExpireTime();
 
     aLeaseInfo.mLease             = Time::SecToMsec(GetLease());
     aLeaseInfo.mKeyLease          = Time::SecToMsec(GetKeyLease());
-    aLeaseInfo.mRemainingLease    = (now <= expireTime) ? (expireTime - now) : 0;
     aLeaseInfo.mRemainingKeyLease = (now <= keyExpireTime) ? (keyExpireTime - now) : 0;
+
+    if (!IsDeleted())
+    {
+        TimeMilli expireTime = GetExpireTime();
+
+        aLeaseInfo.mRemainingLease = (now <= expireTime) ? (expireTime - now) : 0;
+    }
+    else
+    {
+        aLeaseInfo.mRemainingLease = 0;
+    }
 }
 
 Error Server::Host::ProcessTtl(uint32_t aTtl)

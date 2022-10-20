@@ -80,9 +80,9 @@ Mle::Mle(Instance &aInstance)
     , mReattachState(kReattachStop)
     , mAttachCounter(0)
     , mAnnounceDelay(kAnnounceTimeout)
-    , mAttachTimer(aInstance, Mle::HandleAttachTimer)
-    , mDelayedResponseTimer(aInstance, Mle::HandleDelayedResponseTimer)
-    , mMessageTransmissionTimer(aInstance, Mle::HandleMessageTransmissionTimer)
+    , mAttachTimer(aInstance)
+    , mDelayedResponseTimer(aInstance)
+    , mMessageTransmissionTimer(aInstance)
     , mAttachMode(kAnyPartition)
     , mChildUpdateAttempts(0)
     , mChildUpdateRequestState(kChildUpdateRequestNone)
@@ -104,7 +104,7 @@ Mle::Mle(Instance &aInstance)
     , mAlternateChannel(0)
     , mAlternatePanId(Mac::kPanIdBroadcast)
     , mAlternateTimestamp(0)
-    , mDetachGracefullyTimer(aInstance, Mle::HandleDetachGracefullyTimer)
+    , mDetachGracefullyTimer(aInstance)
     , mDetachGracefullyCallback(nullptr)
     , mDetachGracefullyContext(nullptr)
     , mParentResponseCb(nullptr)
@@ -1276,11 +1276,6 @@ exit:
 
 #endif // OPENTHREAD_CONFIG_TMF_NETDATA_SERVICE_ENABLE
 
-void Mle::HandleAttachTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().HandleAttachTimer();
-}
-
 Error Mle::DetermineParentRequestType(ParentRequestType &aType) const
 {
     // This method determines the Parent Request type to use during an
@@ -1578,11 +1573,6 @@ exit:
     return delay;
 }
 
-void Mle::HandleDelayedResponseTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().HandleDelayedResponseTimer();
-}
-
 void Mle::HandleDelayedResponseTimer(void)
 {
     TimeMilli now          = TimerMilli::GetNow();
@@ -1797,12 +1787,15 @@ exit:
     return error;
 }
 
-Error Mle::SendDataRequest(const Ip6::Address &aDestination,
-                           const uint8_t *     aTlvs,
-                           uint8_t             aTlvsLength,
-                           uint16_t            aDelay,
-                           const uint8_t *     aExtraTlvs,
-                           uint8_t             aExtraTlvsLength)
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
+Error Mle::SendDataRequest(const Ip6::Address &                       aDestination,
+                           const uint8_t *                            aTlvs,
+                           uint8_t                                    aTlvsLength,
+                           uint16_t                                   aDelay,
+                           const LinkMetrics::LinkMetrics::QueryInfo *aQueryInfo)
+#else
+Error Mle::SendDataRequest(const Ip6::Address &aDestination, const uint8_t *aTlvs, uint8_t aTlvsLength, uint16_t aDelay)
+#endif
 {
     Error      error = kErrorNone;
     TxMessage *message;
@@ -1812,10 +1805,12 @@ Error Mle::SendDataRequest(const Ip6::Address &aDestination,
     VerifyOrExit((message = NewMleMessage(kCommandDataRequest)) != nullptr, error = kErrorNoBufs);
     SuccessOrExit(error = message->AppendTlvRequestTlv(aTlvs, aTlvsLength));
 
-    if (aExtraTlvs != nullptr && aExtraTlvsLength > 0)
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
+    if (aQueryInfo != nullptr)
     {
-        SuccessOrExit(error = message->AppendBytes(aExtraTlvs, aExtraTlvsLength));
+        SuccessOrExit(error = Get<LinkMetrics::LinkMetrics>().AppendLinkMetricsQueryTlv(*message, *aQueryInfo));
     }
+#endif
 
     if (aDelay)
     {
@@ -1902,11 +1897,6 @@ exit:
     {
         mMessageTransmissionTimer.Stop();
     }
-}
-
-void Mle::HandleMessageTransmissionTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().HandleMessageTransmissionTimer();
 }
 
 void Mle::HandleMessageTransmissionTimer(void)
@@ -2025,7 +2015,6 @@ Error Mle::SendChildUpdateRequest(bool aAppendChallenge, uint32_t aTimeout)
     case kRoleRouter:
     case kRoleLeader:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 
     if (!IsFullThreadDevice())
@@ -3523,7 +3512,6 @@ void Mle::HandleChildUpdateResponse(RxInfo &aRxInfo)
 
     default:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 
     // Status
@@ -3617,7 +3605,6 @@ void Mle::HandleChildUpdateResponse(RxInfo &aRxInfo)
 
     default:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 
     aRxInfo.mClass = (response.mLength == 0) ? RxInfo::kPeerMessage : RxInfo::kAuthoritativeMessage;
@@ -3875,11 +3862,6 @@ exit:
 #endif // OPENTHREAD_CONFIG_MLE_INFORM_PREVIOUS_PARENT_ON_REATTACH
 
 #if OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
-void Mle::ParentSearch::HandleTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().mParentSearch.HandleTimer();
-}
-
 void Mle::ParentSearch::HandleTimer(void)
 {
     int8_t parentRss;
@@ -4342,11 +4324,6 @@ Error Mle::DetachGracefully(otDetachGracefullyCallback aCallback, void *aContext
 
 exit:
     return error;
-}
-
-void Mle::HandleDetachGracefullyTimer(Timer &aTimer)
-{
-    aTimer.Get<Mle>().HandleDetachGracefullyTimer();
 }
 
 void Mle::HandleDetachGracefullyTimer(void)

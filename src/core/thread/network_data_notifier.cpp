@@ -49,7 +49,7 @@ RegisterLogModule("NetworkData");
 
 Notifier::Notifier(Instance &aInstance)
     : InstanceLocator(aInstance)
-    , mTimer(aInstance, HandleTimer)
+    , mTimer(aInstance)
     , mSynchronizeDataTask(aInstance)
     , mNextDelay(0)
     , mWaitingForResponse(false)
@@ -109,7 +109,6 @@ exit:
         break;
     default:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 }
 
@@ -136,11 +135,6 @@ void Notifier::HandleNotifierEvents(Events aEvents)
     {
         SynchronizeServerData();
     }
-}
-
-void Notifier::HandleTimer(Timer &aTimer)
-{
-    aTimer.Get<Notifier>().HandleTimer();
 }
 
 void Notifier::HandleTimer(void)
@@ -173,7 +167,6 @@ void Notifier::HandleCoapResponse(Error aResult)
 
     default:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 }
 

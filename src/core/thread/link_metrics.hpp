@@ -85,6 +85,17 @@ public:
     typedef otLinkMetricsEnhAckProbingIeReportCallback EnhAckProbingIeReportCallback;
 
     /**
+     * This structure provides the info used for appending MLE Link Metric Query TLV.
+     *
+     */
+    struct QueryInfo : public Clearable<QueryInfo>
+    {
+        uint8_t mSeriesId;             ///< Series ID.
+        uint8_t mTypeIds[kMaxTypeIds]; ///< Type IDs.
+        uint8_t mTypeIdCount;          ///< Number of entries in `mTypeIds[]`.
+    };
+
+    /**
      * This constructor initializes an instance of the LinkMetrics class.
      *
      * @param[in]  aInstance  A reference to the OpenThread interface.
@@ -103,7 +114,7 @@ public:
      *
      * @retval kErrorNone             Successfully sent a Link Metrics query message.
      * @retval kErrorNoBufs           Insufficient buffers to generate the MLE Data Request message.
-     * @retval kErrorInvalidArgs      TypeIdFlags are not valid or exceed the count limit.
+     * @retval kErrorInvalidArgs      Type IDs are not valid or exceed the count limit.
      * @retval kErrorUnknownNeighbor  @p aDestination is not link-local or the neighbor is not found.
      *
      */
@@ -264,6 +275,18 @@ public:
      */
     void ProcessEnhAckIeData(const uint8_t *aData, uint8_t aLength, const Neighbor &aNeighbor);
 
+    /**
+     * This method appends MLE Link Metrics Query TLV to a given message.
+     *
+     * @param[in] aMessage     The message to append to.
+     * @param[in] aInfo        The link metrics query info to use to prepare the message.
+     *
+     * @retval kErrorNone     Successfully appended the TLV to the message.
+     * @retval kErrorNoBufs   Insufficient buffers available to append the TLV.
+     *
+     */
+    Error AppendLinkMetricsQueryTlv(Message &aMessage, const QueryInfo &aInfo);
+
 private:
     // Max number of SeriesInfo that could be allocated by the pool.
     static constexpr uint16_t kMaxSeriesSupported = OPENTHREAD_CONFIG_MLE_LINK_METRICS_MAX_SERIES_SUPPORTED;
@@ -277,11 +300,6 @@ private:
     static constexpr int32_t kMinRssi       = -130;
     static constexpr int32_t kMaxRssi       = 0;
 
-    Error SendLinkMetricsQuery(const Ip6::Address &aDestination,
-                               uint8_t             aSeriesId,
-                               const TypeIdFlags * aTypeIdFlags,
-                               uint8_t             aTypeIdFlagsCount);
-
     Status ConfigureForwardTrackingSeries(uint8_t        aSeriesId,
                                           uint8_t        aSeriesFlags,
                                           const Metrics &aMetrics,
@@ -289,12 +307,12 @@ private:
 
     Status ConfigureEnhAckProbing(EnhAckFlags aEnhAckFlags, const Metrics &aMetrics, Neighbor &aNeighbor);
 
-    Neighbor *GetNeighborFromLinkLocalAddr(const Ip6::Address &aDestination);
+    Error FindNeighbor(const Ip6::Address &aDestination, Neighbor *&aNeighbor) const;
 
-    static Error ReadTypeIdFlagsFromMessage(const Message &aMessage,
-                                            uint16_t       aStartPos,
-                                            uint16_t       aEndPos,
-                                            Metrics &      aMetrics);
+    static Error ReadTypeIdsFromMessage(const Message &aMessage,
+                                        uint16_t       aStartOffset,
+                                        uint16_t       aEndOffset,
+                                        Metrics &      aMetrics);
     static Error AppendReportSubTlvToMessage(Message &aMessage, const MetricsValues &aValues);
 
     static uint8_t ScaleLinkMarginToRawValue(uint8_t aLinkMargin);

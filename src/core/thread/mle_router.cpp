@@ -63,8 +63,6 @@ RegisterLogModule("Mle");
 MleRouter::MleRouter(Instance &aInstance)
     : Mle(aInstance)
     , mAdvertiseTrickleTimer(aInstance, MleRouter::HandleAdvertiseTrickleTimer)
-    , mAddressSolicit(UriPath::kAddressSolicit, &MleRouter::HandleAddressSolicit, this)
-    , mAddressRelease(UriPath::kAddressRelease, &MleRouter::HandleAddressRelease, this)
     , mChildTable(aInstance)
     , mRouterTable(aInstance)
     , mChallengeTimeout(0)
@@ -214,7 +212,6 @@ Error MleRouter::BecomeRouter(ThreadStatusTlv::Status aStatus)
 
     default:
         OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
     }
 
 exit:
@@ -279,12 +276,7 @@ exit:
 
 void MleRouter::StopLeader(void)
 {
-    Get<Tmf::Agent>().RemoveResource(mAddressSolicit);
-    Get<Tmf::Agent>().RemoveResource(mAddressRelease);
-    Get<MeshCoP::ActiveDatasetManager>().StopLeader();
-    Get<MeshCoP::PendingDatasetManager>().StopLeader();
     StopAdvertiseTrickleTimer();
-    Get<NetworkData::Leader>().Stop();
     Get<ThreadNetif>().UnsubscribeAllRoutersMulticast();
 }
 
@@ -388,7 +380,6 @@ void MleRouter::SetStateRouter(uint16_t aRloc16)
 
     Get<ThreadNetif>().SubscribeAllRoutersMulticast();
     mPreviousPartitionIdRouter = mLeaderData.GetPartitionId();
-    Get<NetworkData::Leader>().Stop();
     Get<Ip6::Ip6>().SetForwardingEnabled(true);
     Get<Ip6::Mpl>().SetTimerExpirations(kMplRouterDataMessageTimerExpirations);
     Get<Mac::Mac>().SetBeaconEnabled(true);
@@ -430,8 +421,6 @@ void MleRouter::SetStateLeader(uint16_t aRloc16, LeaderStartMode aStartMode)
     Get<NetworkData::Leader>().Start(aStartMode);
     Get<MeshCoP::ActiveDatasetManager>().StartLeader();
     Get<MeshCoP::PendingDatasetManager>().StartLeader();
-    Get<Tmf::Agent>().AddResource(mAddressSolicit);
-    Get<Tmf::Agent>().AddResource(mAddressRelease);
     Get<Ip6::Ip6>().SetForwardingEnabled(true);
     Get<Ip6::Mpl>().SetTimerExpirations(kMplRouterDataMessageTimerExpirations);
     Get<Mac::Mac>().SetBeaconEnabled(true);
@@ -519,11 +508,6 @@ void MleRouter::SendAdvertisement(void)
 
     switch (mRole)
     {
-    case kRoleDisabled:
-    case kRoleDetached:
-        OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
-
     case kRoleChild:
         break;
 
@@ -531,6 +515,10 @@ void MleRouter::SendAdvertisement(void)
     case kRoleLeader:
         SuccessOrExit(error = message->AppendRouteTlv());
         break;
+
+    case kRoleDisabled:
+    case kRoleDetached:
+        OT_ASSERT(false);
     }
 
     destination.SetToLinkLocalAllNodesMulticast();
@@ -562,10 +550,6 @@ Error MleRouter::SendLinkRequest(Neighbor *aNeighbor)
 
     switch (mRole)
     {
-    case kRoleDisabled:
-        OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
-
     case kRoleDetached:
         SuccessOrExit(error = message->AppendTlvRequestTlv(kDetachedTlvs));
         break;
@@ -589,6 +573,9 @@ Error MleRouter::SendLinkRequest(Neighbor *aNeighbor)
         SuccessOrExit(error = message->AppendSourceAddressTlv());
         SuccessOrExit(error = message->AppendLeaderDataTlv());
         break;
+
+    case kRoleDisabled:
+        OT_ASSERT(false);
     }
 
 #if OPENTHREAD_CONFIG_TIME_SYNC_ENABLE
@@ -926,10 +913,6 @@ Error MleRouter::HandleLinkAccept(RxInfo &aRxInfo, bool aRequest)
 
     switch (mRole)
     {
-    case kRoleDisabled:
-        OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
-
     case kRoleDetached:
         // Address16
         SuccessOrExit(error = Tlv::Find<Address16Tlv>(aRxInfo.mMessage, address16));
@@ -1006,6 +989,9 @@ Error MleRouter::HandleLinkAccept(RxInfo &aRxInfo, bool aRequest)
         }
 
         break;
+
+    case kRoleDisabled:
+        OT_ASSERT(false);
     }
 
     // finish link synchronization
@@ -1602,23 +1588,10 @@ void MleRouter::UpdateRoutes(const RouteTlv &aRoute, uint8_t aRouterId)
         ResetAdvertiseInterval();
     }
 
-#if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_INFO)
-
-    VerifyOrExit(changed);
-    LogInfo("Route table updated");
-
-    for (Router &router : Get<RouterTable>().Iterate())
+    if (changed)
     {
-        LogInfo("    %04x -> %04x, cost:%d %d, lqin:%d, lqout:%d, link:%s", router.GetRloc16(),
-                (router.GetNextHop() == kInvalidRouterId) ? 0xffff : Rloc16FromRouterId(router.GetNextHop()),
-                router.GetCost(), mRouterTable.GetLinkCost(router), router.GetLinkQualityIn(),
-                router.GetLinkQualityOut(),
-                router.GetRloc16() == GetRloc16() ? "device" : ToYesNo(router.IsStateValid()));
+        Get<RouterTable>().LogRouteTable();
     }
-
-#else
-    OT_UNUSED_VARIABLE(changed);
-#endif
 
 exit:
     return;
@@ -1860,10 +1833,6 @@ void MleRouter::HandleTimeTick(void)
 
     switch (mRole)
     {
-    case kRoleDisabled:
-        OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
-
     case kRoleDetached:
         if (mChallengeTimeout == 0)
         {
@@ -1920,6 +1889,9 @@ void MleRouter::HandleTimeTick(void)
 
     case kRoleLeader:
         break;
+
+    case kRoleDisabled:
+        OT_ASSERT(false);
     }
 
     // update children state
@@ -1943,7 +1915,6 @@ void MleRouter::HandleTimeTick(void)
         case Neighbor::kStateParentResponse:
         case Neighbor::kStateLinkRequest:
             OT_ASSERT(false);
-            OT_UNREACHABLE_CODE(break);
         }
 
 #if OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE
@@ -2486,11 +2457,6 @@ void MleRouter::HandleChildIdRequest(RxInfo &aRxInfo)
 
     switch (mRole)
     {
-    case kRoleDisabled:
-    case kRoleDetached:
-        OT_ASSERT(false);
-        OT_UNREACHABLE_CODE(break);
-
     case kRoleChild:
         child->SetState(Neighbor::kStateChildIdRequest);
         IgnoreError(BecomeRouter(ThreadStatusTlv::kHaveChildIdRequest));
@@ -2500,6 +2466,10 @@ void MleRouter::HandleChildIdRequest(RxInfo &aRxInfo)
     case kRoleLeader:
         SuccessOrExit(error = SendChildIdResponse(*child));
         break;
+
+    case kRoleDisabled:
+    case kRoleDetached:
+        OT_ASSERT(false);
     }
 
 exit:
@@ -3732,7 +3702,7 @@ Error MleRouter::SendAddressSolicit(ThreadStatusTlv::Status aStatus)
 
     VerifyOrExit(!mAddressSolicitPending);
 
-    message = Get<Tmf::Agent>().NewPriorityConfirmablePostMessage(UriPath::kAddressSolicit);
+    message = Get<Tmf::Agent>().NewPriorityConfirmablePostMessage(kUriAddressSolicit);
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = Tlv::Append<ThreadExtMacAddressTlv>(*message, Get<Mac::Mac>().GetExtAddress()));
@@ -3766,7 +3736,7 @@ void MleRouter::SendAddressRelease(void)
     Tmf::MessageInfo messageInfo(GetInstance());
     Coap::Message *  message;
 
-    message = Get<Tmf::Agent>().NewPriorityConfirmablePostMessage(UriPath::kAddressRelease);
+    message = Get<Tmf::Agent>().NewPriorityConfirmablePostMessage(kUriAddressRelease);
     VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
     SuccessOrExit(error = Tlv::Append<ThreadRloc16Tlv>(*message, Rloc16FromRouterId(mRouterId)));
@@ -3902,12 +3872,7 @@ bool MleRouter::IsExpectedToBecomeRouterSoon(void) const
             mAddressSolicitPending);
 }
 
-void MleRouter::HandleAddressSolicit(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    static_cast<MleRouter *>(aContext)->HandleAddressSolicit(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
-}
-
-void MleRouter::HandleAddressSolicit(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
+template <> void MleRouter::HandleTmf<kUriAddressSolicit>(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     Error                   error          = kErrorNone;
     ThreadStatusTlv::Status responseStatus = ThreadStatusTlv::kNoAddressAvailable;
@@ -3915,6 +3880,8 @@ void MleRouter::HandleAddressSolicit(Coap::Message &aMessage, const Ip6::Message
     Mac::ExtAddress         extAddress;
     uint16_t                rloc16;
     uint8_t                 status;
+
+    VerifyOrExit(mRole == kRoleLeader, error = kErrorInvalidState);
 
     VerifyOrExit(aMessage.IsConfirmablePostRequest(), error = kErrorParse);
 
@@ -4037,17 +4004,14 @@ exit:
     FreeMessage(message);
 }
 
-void MleRouter::HandleAddressRelease(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    static_cast<MleRouter *>(aContext)->HandleAddressRelease(AsCoapMessage(aMessage), AsCoreType(aMessageInfo));
-}
-
-void MleRouter::HandleAddressRelease(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
+template <> void MleRouter::HandleTmf<kUriAddressRelease>(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     uint16_t        rloc16;
     Mac::ExtAddress extAddress;
     uint8_t         routerId;
     Router *        router;
+
+    VerifyOrExit(mRole == kRoleLeader);
 
     VerifyOrExit(aMessage.IsConfirmablePostRequest());
 

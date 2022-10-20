@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env python
 #
 # Copyright (c) 2022, The OpenThread Authors.
 # All rights reserved.
@@ -27,48 +27,32 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 
-# NOTE: This script has not been fully tested up to now
+# This script merges the device fields in the argument file to `deviceInputFields.xml` in Harness
+# If a device field appears in both files, it will only keep that in the argument file
 
-set -euxo pipefail
+import os
+import sys
+import xml.etree.ElementTree as ET
 
-OT_PATH=${OT_PATH:-"/home/pi/repo/openthread"}
-OTBR_DOCKER_IMAGE=${OTBR_DOCKER_IMAGE:-"otbr-reference-device-1.2"}
+HARNESS_XML_PATH = r'%s\GRL\Thread1.2\Web\data\deviceInputFields.xml' % os.environ['systemdrive']
 
-DOCKER_BUILD_OTBR_OPTIONS=(
-    "-DOTBR_DUA_ROUTING=ON"
-    "-DOT_DUA=ON"
-    "-DOT_MLR=ON"
-    "-DOT_THREAD_VERSION=1.2"
-    "-DOT_SIMULATION_MAX_NETWORK_SIZE=64"
-)
 
-git clone https://github.com/openthread/ot-br-posix.git --recurse-submodules --shallow-submodules --depth=1
-ETC_PATH="${OT_PATH}/tools/harness-simulation/posix/etc"
+def main():
+    tree = ET.parse(HARNESS_XML_PATH)
+    root = tree.getroot()
+    added = ET.parse(sys.argv[1]).getroot()
 
-(
-    cd ot-br-posix
-    # Use system V `service` command instead
-    mkdir -p root/etc/init.d
-    cp "${ETC_PATH}/commissionerd" root/etc/init.d/commissionerd
-    sudo chown root:root root/etc/init.d/commissionerd
-    sudo chmod +x root/etc/init.d/commissionerd
+    added_names = set(device.attrib['name'] for device in added.iter('DEVICE'))
+    # If some devices already exist, remove them first, and then add them back in case of update
+    removed_devices = filter(lambda x: x.attrib['name'] in added_names, root.iter('DEVICE'))
 
-    cp "${ETC_PATH}/server.patch" script/server.patch
-    patch script/server script/server.patch
-    mkdir -p root/tmp
-    cp "${ETC_PATH}/requirements.txt" root/tmp/requirements.txt
+    for device in removed_devices:
+        root.remove(device)
+    for device in added.iter('DEVICE'):
+        root.append(device)
 
-    docker build . \
-        -t "${OTBR_DOCKER_IMAGE}" \
-        -f "${ETC_PATH}/Dockerfile" \
-        --build-arg REFERENCE_DEVICE=1 \
-        --build-arg BORDER_ROUTING=0 \
-        --build-arg BACKBONE_ROUTER=1 \
-        --build-arg NAT64=0 \
-        --build-arg WEB_GUI=0 \
-        --build-arg REST_API=0 \
-        --build-arg EXTERNAL_COMMISSIONER=1 \
-        --build-arg OTBR_OPTIONS="${DOCKER_BUILD_OTBR_OPTIONS[*]}"
-)
+    tree.write(HARNESS_XML_PATH)
 
-rm -rf ot-br-posix
+
+if __name__ == '__main__':
+    main()

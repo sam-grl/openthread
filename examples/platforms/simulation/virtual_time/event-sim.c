@@ -38,6 +38,7 @@
 #include "platform-simulation.h"
 
 extern uint16_t sPortOffset;
+extern uint16_t sPortBase;
 extern int      sSockFd;
 
 void otSimSendSleepEvent(void)
@@ -118,7 +119,7 @@ void otSimSendEvent(struct Event *aEvent)
     memset(&sockaddr, 0, sizeof(sockaddr));
     sockaddr.sin_family = AF_INET;
     inet_pton(AF_INET, "127.0.0.1", &sockaddr.sin_addr);
-    sockaddr.sin_port = htons(9000 + sPortOffset);
+    sockaddr.sin_port = htons(sPortBase + sPortOffset);
 
     // send header and data.
     rval = sendto(sSockFd, aEvent, offsetof(struct Event, mData) + aEvent->mDataLength, 0, (struct sockaddr *)&sockaddr,

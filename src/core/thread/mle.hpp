@@ -1447,26 +1447,29 @@ protected:
      */
     Mac::ShortAddress GetNextHop(uint16_t aDestination) const;
 
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
     /**
-     * This method generates an MLE Data Request message.
+     * This method generates an MLE Data Request message which includes a Link Metrics Query TLV.
      *
      * @param[in]  aDestination      A reference to the IPv6 address of the destination.
      * @param[in]  aTlvs             A pointer to requested TLV types.
      * @param[in]  aTlvsLength       The number of TLV types in @p aTlvs.
      * @param[in]  aDelay            Delay in milliseconds before the Data Request message is sent.
-     * @param[in]  aExtraTlvs        A pointer to extra TLVs.
-     * @param[in]  aExtraTlvsLength  Length of extra TLVs.
+     * @param[in]  aQueryInfo        A Link Metrics query info.
      *
      * @retval kErrorNone     Successfully generated an MLE Data Request message.
      * @retval kErrorNoBufs   Insufficient buffers to generate the MLE Data Request message.
      *
      */
-    Error SendDataRequest(const Ip6::Address &aDestination,
-                          const uint8_t *     aTlvs,
-                          uint8_t             aTlvsLength,
-                          uint16_t            aDelay,
-                          const uint8_t *     aExtraTlvs,
-                          uint8_t             aExtraTlvsLength);
+    Error SendDataRequest(const Ip6::Address &                       aDestination,
+                          const uint8_t *                            aTlvs,
+                          uint8_t                                    aTlvsLength,
+                          uint16_t                                   aDelay,
+                          const LinkMetrics::LinkMetrics::QueryInfo &aQueryInfo)
+    {
+        return SendDataRequest(aDestination, aTlvs, aTlvsLength, aDelay, &aQueryInfo);
+    }
+#endif
 
     /**
      * This method generates an MLE Data Request message.
@@ -1484,7 +1487,7 @@ protected:
     template <uint8_t kArrayLength>
     Error SendDataRequest(const Ip6::Address &aDestination, const uint8_t (&aTlvs)[kArrayLength], uint16_t aDelay = 0)
     {
-        return SendDataRequest(aDestination, aTlvs, kArrayLength, aDelay, nullptr, 0);
+        return SendDataRequest(aDestination, aTlvs, kArrayLength, aDelay);
     }
 
     /**
@@ -1675,6 +1678,17 @@ protected:
 
 #endif
 
+private:
+    // Declare early so we can use in as `TimerMilli` callbacks.
+    void HandleAttachTimer(void);
+    void HandleDelayedResponseTimer(void);
+    void HandleMessageTransmissionTimer(void);
+
+protected:
+    using AttachTimer = TimerMilliIn<Mle, &Mle::HandleAttachTimer>;
+    using DelayTimer  = TimerMilliIn<Mle, &Mle::HandleDelayedResponseTimer>;
+    using MsgTxTimer  = TimerMilliIn<Mle, &Mle::HandleMessageTransmissionTimer>;
+
     Ip6::Netif::UnicastAddress mLeaderAloc; ///< Leader anycast locator
 
     LeaderData    mLeaderData;               ///< Last received Leader Data TLV.
@@ -1688,9 +1702,9 @@ protected:
     ReattachState mReattachState;            ///< Reattach state
     uint16_t      mAttachCounter;            ///< Attach attempt counter.
     uint16_t      mAnnounceDelay;            ///< Delay in between sending Announce messages during attach.
-    TimerMilli    mAttachTimer;              ///< The timer for driving the attach process.
-    TimerMilli    mDelayedResponseTimer;     ///< The timer to delay MLE responses.
-    TimerMilli    mMessageTransmissionTimer; ///< The timer for (re-)sending of MLE messages (e.g. Child Update).
+    AttachTimer   mAttachTimer;              ///< The timer for driving the attach process.
+    DelayTimer    mDelayedResponseTimer;     ///< The timer to delay MLE responses.
+    MsgTxTimer    mMessageTransmissionTimer; ///< The timer for (re-)sending of MLE messages (e.g. Child Update).
 
 private:
     static constexpr uint8_t kMleHopLimit        = 255;
@@ -1834,6 +1848,8 @@ private:
 #endif
 
 #if OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
+    void HandleParentSearchTimer(void) { mParentSearch.HandleTimer(); }
+
     class ParentSearch : public InstanceLocator
     {
     public:
@@ -1843,13 +1859,14 @@ private:
             , mBackoffWasCanceled(false)
             , mRecentlyDetached(false)
             , mBackoffCancelTime(0)
-            , mTimer(aInstance, HandleTimer)
+            , mTimer(aInstance)
         {
         }
 
         void StartTimer(void);
         void UpdateState(void);
         void SetRecentlyDetached(void) { mRecentlyDetached = true; }
+        void HandleTimer(void);
 
     private:
         // All timer intervals are converted to milliseconds.
@@ -1858,27 +1875,20 @@ private:
         static constexpr uint32_t kJitterInterval  = (15 * 1000u);
         static constexpr int8_t   kRssThreadhold   = OPENTHREAD_CONFIG_PARENT_SEARCH_RSS_THRESHOLD;
 
-        static void HandleTimer(Timer &aTimer);
-        void        HandleTimer(void);
+        using SearchTimer = TimerMilliIn<Mle, &Mle::HandleParentSearchTimer>;
 
-        bool       mIsInBackoff : 1;
-        bool       mBackoffWasCanceled : 1;
-        bool       mRecentlyDetached : 1;
-        TimeMilli  mBackoffCancelTime;
-        TimerMilli mTimer;
+        bool        mIsInBackoff : 1;
+        bool        mBackoffWasCanceled : 1;
+        bool        mRecentlyDetached : 1;
+        TimeMilli   mBackoffCancelTime;
+        SearchTimer mTimer;
     };
 #endif // OPENTHREAD_CONFIG_PARENT_SEARCH_ENABLE
 
     Error       Start(StartMode aMode);
     void        Stop(StopMode aMode);
     void        HandleNotifierEvents(Events aEvents);
-    static void HandleAttachTimer(Timer &aTimer);
-    void        HandleAttachTimer(void);
-    static void HandleDelayedResponseTimer(Timer &aTimer);
-    void        HandleDelayedResponseTimer(void);
     void        SendDelayedResponse(TxMessage &aMessage, const DelayedResponseMetadata &aMetadata);
-    static void HandleMessageTransmissionTimer(Timer &aTimer);
-    void        HandleMessageTransmissionTimer(void);
     static void HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
     void        HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     void        ScheduleMessageTransmissionTimer(void);
@@ -1887,6 +1897,16 @@ private:
     void        HandleDetachGracefullyTimer(void);
     bool        IsDetachingGracefully(void) { return mDetachGracefullyTimer.IsRunning(); }
     Error       SendChildUpdateRequest(bool aAppendChallenge, uint32_t aTimeout);
+
+#if OPENTHREAD_CONFIG_MLE_LINK_METRICS_INITIATOR_ENABLE || OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
+    Error SendDataRequest(const Ip6::Address &                       aDestination,
+                          const uint8_t *                            aTlvs,
+                          uint8_t                                    aTlvsLength,
+                          uint16_t                                   aDelay,
+                          const LinkMetrics::LinkMetrics::QueryInfo *aQueryInfo = nullptr);
+#else
+    Error SendDataRequest(const Ip6::Address &aDestination, const uint8_t *aTlvs, uint8_t aTlvsLength, uint16_t aDelay);
+#endif
 
 #if OPENTHREAD_FTD
     static void HandleDetachGracefullyAddressReleaseResponse(void *               aContext,
@@ -1963,6 +1983,8 @@ private:
     static const char *MessageTypeActionToSuffixString(MessageType aType, MessageAction aAction);
 #endif
 
+    using DetachGracefullyTimer = TimerMilliIn<Mle, &Mle::HandleDetachGracefullyTimer>;
+
     MessageQueue mDelayedResponses;
 
     Challenge mParentRequestChallenge;
@@ -2011,7 +2033,7 @@ private:
     Ip6::Netif::MulticastAddress mLinkLocalAllThreadNodes;
     Ip6::Netif::MulticastAddress mRealmLocalAllThreadNodes;
 
-    TimerMilli                 mDetachGracefullyTimer;
+    DetachGracefullyTimer      mDetachGracefullyTimer;
     otDetachGracefullyCallback mDetachGracefullyCallback;
     void *                     mDetachGracefullyContext;
 

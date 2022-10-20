@@ -82,7 +82,10 @@ enum
     OT_SIM_EVENT_RADIO_RX_DONE       = 10,
 };
 
-enum { OT_EVENT_DATA_MAX_SIZE = 1024 };
+enum {
+    OT_EVENT_DATA_MAX_SIZE = 1024,
+    MAX_NETWORK_SIZE = OPENTHREAD_SIMULATION_MAX_NETWORK_SIZE,
+};
 
 /**
  * Unique node ID.
@@ -216,6 +219,18 @@ bool platformRadioIsTransmitPending(void);
  *
  */
 void platformRadioReportStateToSimulator(void);
+
+/**
+ * This function parses an environment variable as an unsigned 16-bit integer.
+ *
+ * If the environment variable does not exist, this function does nothing.
+ * If it is not a valid integer, this function will terminate the process with an error message.
+ *
+ * @param[in]   aEnvName  The name of the environment variable.
+ * @param[out]  aValue    A pointer to the unsigned 16-bit integer.
+ *
+ */
+void parseFromEnvAsUint16(const char *aEnvName, uint16_t *aValue);
 
 #if OPENTHREAD_CONFIG_RADIO_LINK_TREL_ENABLE
 
