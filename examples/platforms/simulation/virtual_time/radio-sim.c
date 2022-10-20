@@ -26,8 +26,6 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#if OPENTHREAD_SIMULATION_VIRTUAL_TIME
-
 #include "platform-simulation.h"
 #include "radio.h"
 #include "virtual_time/event-sim.h"
@@ -76,6 +74,7 @@ extern int8_t         sCcaEdThresh;
 extern int8_t         sChannelMaxTransmitPower[kMaxChannel - kMinChannel + 1];
 extern uint8_t        sCurrentChannel;
 
+#if OPENTHREAD_SIMULATION_VIRTUAL_TIME
 
 // declaration of radio functions only locally used for virtual-time radio
 static void setRadioSubState(RadioSubState aState, uint64_t timeToRemainInState);

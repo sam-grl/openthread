@@ -26,8 +26,8 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "platform-simulation.h"
 #include "radio.h"
+#include "platform-simulation.h"
 
 #include <errno.h>
 #include <sys/time.h>
@@ -64,6 +64,8 @@ static int      sRxFd       = -1;
 static uint16_t sPortBase   = 9000;
 static uint16_t sPortOffset = 0;
 static uint16_t sPort       = 0;
+
+static void initFds(void);
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME
 
 // Definition of both real/virtual-time mode variables
@@ -399,7 +401,7 @@ otError otPlatRadioSleep(otInstance *aInstance)
 
     if (sState == OT_RADIO_STATE_SLEEP || sState == OT_RADIO_STATE_RECEIVE)
     {
-        error  = OT_ERROR_NONE;
+        error = OT_ERROR_NONE;
         setRadioState(OT_RADIO_STATE_SLEEP);
     }
 
@@ -518,7 +520,7 @@ void radioReceive(otInstance *aInstance)
     }
     else if (!isAck || sPromiscuous)
     {
-        radioProcessFrame(aInstance);
+        radioProcessFrame(aInstance, OT_ERROR_NONE);
     }
 
 exit:
@@ -757,7 +759,8 @@ void radioProcessFrame(otInstance *aInstance, otError aError)
     sReceiveFrame.mInfo.mRxInfo.mAckedWithFramePending = false;
     sReceiveFrame.mInfo.mRxInfo.mAckedWithSecEnhAck    = false;
 
-    otEXPECT(sPromiscuous == false); // Ack never sent in promiscuous mode https://github.com/openthread/openthread/issues/4161
+    // Ack not sent in promiscuous https://github.com/openthread/openthread/issues/4161
+    otEXPECT(sPromiscuous == false);
 
     otEXPECT_ACTION(otMacFrameDoesAddrMatch(&sReceiveFrame, sPanid, sShortAddress, &sExtAddress),
                     error = OT_ERROR_ABORT);
@@ -771,7 +774,7 @@ void radioProcessFrame(otInstance *aInstance, otError aError)
     {
         radioPrepareAck();
 #if OPENTHREAD_SIMULATION_VIRTUAL_TIME == 0
-        radioTransmit(&sAckMesssage, &sAckFrame);
+        radioTransmit(&sAckMessage, &sAckFrame);
 #endif
 #if OPENTHREAD_CONFIG_THREAD_VERSION >= OT_THREAD_VERSION_1_2
         if (otMacFrameIsSecurityEnabled(&sAckFrame))
@@ -843,7 +846,7 @@ otError otPlatRadioGetTransmitPower(otInstance *aInstance, int8_t *aPower)
     assert(aInstance != NULL);
 
     int8_t maxPower = sChannelMaxTransmitPower[sCurrentChannel - kMinChannel];
-    *aPower = sTxPower < maxPower ? sTxPower : maxPower;
+    *aPower         = sTxPower < maxPower ? sTxPower : maxPower;
 
     return OT_ERROR_NONE;
 }
@@ -1252,7 +1255,10 @@ void platformRadioProcess(otInstance *aInstance, const fd_set *aReadFdSet, const
 
         if (rval > 0)
         {
-            if (sockaddr.sin_port != htons(sPort))
+            uint16_t srcPort   = ntohs(sockaddr.sin_port);
+            uint16_t srcNodeId = srcPort - sPortOffset - sPortBase;
+
+            if (NodeIdFilterIsConnectable(srcNodeId) && srcPort != sPort)
             {
                 sReceiveFrame.mLength = (uint16_t)(rval - 1);
 

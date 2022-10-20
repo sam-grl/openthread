@@ -39,8 +39,8 @@
 #include <openthread/config.h>
 
 #include <assert.h>
-#include <stdio.h>
 #include <stddef.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -61,7 +61,7 @@
 #include "openthread-core-config.h"
 #include "platform-config.h"
 
-#define UNDEFINED_TIME_US 0  // an undefined period of time (us) that is > 0
+#define UNDEFINED_TIME_US 0 // an undefined period of time (us) that is > 0
 
 /**
  * The event types defined for communication with a simulator and/or with other simulated nodes.
@@ -69,20 +69,21 @@
  */
 enum
 {
-    OT_SIM_EVENT_ALARM_FIRED         = 0,
-    OT_SIM_EVENT_RADIO_RECEIVED      = 1,
-    OT_SIM_EVENT_UART_WRITE          = 2,
-    OT_SIM_EVENT_RADIO_SPINEL_WRITE  = 3,
-    OT_SIM_EVENT_POSTCMD             = 4,
-    OT_SIM_EVENT_OTNS_STATUS_PUSH    = 5,
-    OT_SIM_EVENT_RADIO_COMM_START    = 6,
-    OT_SIM_EVENT_RADIO_TX_DONE       = 7,
-    OT_SIM_EVENT_RADIO_CHAN_SAMPLE   = 8,
-    OT_SIM_EVENT_RADIO_STATE         = 9,
-    OT_SIM_EVENT_RADIO_RX_DONE       = 10,
+    OT_SIM_EVENT_ALARM_FIRED        = 0,
+    OT_SIM_EVENT_RADIO_RECEIVED     = 1,
+    OT_SIM_EVENT_UART_WRITE         = 2,
+    OT_SIM_EVENT_RADIO_SPINEL_WRITE = 3,
+    OT_SIM_EVENT_POSTCMD            = 4,
+    OT_SIM_EVENT_OTNS_STATUS_PUSH   = 5,
+    OT_SIM_EVENT_RADIO_COMM_START   = 6,
+    OT_SIM_EVENT_RADIO_TX_DONE      = 7,
+    OT_SIM_EVENT_RADIO_CHAN_SAMPLE  = 8,
+    OT_SIM_EVENT_RADIO_STATE        = 9,
+    OT_SIM_EVENT_RADIO_RX_DONE      = 10,
 };
 
-enum {
+enum
+{
     OT_EVENT_DATA_MAX_SIZE = 1024,
     MAX_NETWORK_SIZE       = OPENTHREAD_SIMULATION_MAX_NETWORK_SIZE,
 };

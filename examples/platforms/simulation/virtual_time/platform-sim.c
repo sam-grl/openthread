@@ -32,8 +32,6 @@
  *   This file includes the platform-specific initializers and processing functions.
  */
 
-#if OPENTHREAD_SIMULATION_VIRTUAL_TIME
-
 #include "platform-simulation.h"
 #include "virtual_time/event-sim.h"
 
@@ -49,6 +47,8 @@
 #include <openthread/tasklet.h>
 
 #include "utils/uart.h"
+
+#if OPENTHREAD_SIMULATION_VIRTUAL_TIME
 
 uint32_t gNodeId           = 1;
 uint64_t gLastAlarmEventId = 0;
@@ -71,12 +71,12 @@ static void handleSignal(int aSignal)
     gTerminate = true;
 }
 
-#define VERIFY_EVENT_SIZE(X) assert( (payloadLen >= sizeof(X)) && "received event payload too small" );
+#define VERIFY_EVENT_SIZE(X) assert((payloadLen >= sizeof(X)) && "received event payload too small");
 
 static void receiveEvent(otInstance *aInstance)
 {
-    struct Event event;
-    ssize_t      rval = recvfrom(sSockFd, (char *)&event, sizeof(event), 0, NULL, NULL);
+    struct Event  event;
+    ssize_t       rval = recvfrom(sSockFd, (char *)&event, sizeof(event), 0, NULL, NULL);
     const uint8_t *evData = event.mData;
 
     if (rval < 0 || (uint16_t)rval < offsetof(struct Event, mData))
@@ -94,7 +94,7 @@ static void receiveEvent(otInstance *aInstance)
         // store the optional msg id from payload
         if (payloadLen >= sizeof(gLastAlarmEventId))
         {
-            gLastAlarmEventId = (uint64_t) *evData;
+            gLastAlarmEventId = (uint64_t)*evData;
         }
         break;
 
@@ -110,8 +110,7 @@ static void receiveEvent(otInstance *aInstance)
     case OT_SIM_EVENT_RADIO_RX_DONE:
         VERIFY_EVENT_SIZE(struct RadioCommEventData)
         const size_t sz = sizeof(struct RadioCommEventData);
-        platformRadioRxDone(aInstance, evData + sz,
-                       event.mDataLength - sz, (struct RadioCommEventData *)evData);
+        platformRadioRxDone(aInstance, evData + sz, event.mDataLength - sz, (struct RadioCommEventData *)evData);
         break;
 
     case OT_SIM_EVENT_RADIO_TX_DONE:
@@ -268,7 +267,7 @@ void otSysProcessDrivers(otInstance *aInstance)
 #endif
 
     if (!otTaskletsArePending(aInstance) && platformAlarmGetNext() > 0 &&
-        (!platformRadioIsTransmitPending() || platformRadioIsBusy()) )
+        (!platformRadioIsTransmitPending() || platformRadioIsBusy()))
     {
         // report my final radio state at end of this time instant, then go to sleep.
         platformRadioReportStateToSimulator();
@@ -300,8 +299,9 @@ void otSysProcessDrivers(otInstance *aInstance)
 
 void otPlatOtnsStatus(const char *aStatus)
 {
-    uint16_t     statusLength = (uint16_t)strlen(aStatus);
-    if (statusLength > OT_EVENT_DATA_MAX_SIZE){
+    uint16_t statusLength = (uint16_t)strlen(aStatus);
+    if (statusLength > OT_EVENT_DATA_MAX_SIZE)
+    {
         statusLength = OT_EVENT_DATA_MAX_SIZE;
         assert(statusLength <= OT_EVENT_DATA_MAX_SIZE);
     }

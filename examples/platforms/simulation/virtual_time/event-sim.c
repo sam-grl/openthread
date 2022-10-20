@@ -32,14 +32,14 @@
  *   This file includes simulation-event message formatting and parsing functions.
  */
 
-#if OPENTHREAD_SIMULATION_VIRTUAL_TIME
-
 #include "event-sim.h"
 #include "platform-simulation.h"
 
 extern uint16_t sPortOffset;
 extern uint16_t sPortBase;
 extern int      sSockFd;
+
+#if OPENTHREAD_SIMULATION_VIRTUAL_TIME
 
 void otSimSendSleepEvent(void)
 {
@@ -88,7 +88,8 @@ void otSimSendRadioStateEvent(struct RadioStateEventData *aStateData, uint64_t a
     otSimSendEvent(&event);
 }
 
-void otSimSendUartWriteEvent(const uint8_t *aData, uint16_t aLength) {
+void otSimSendUartWriteEvent(const uint8_t *aData, uint16_t aLength)
+{
     assert(aLength <= OT_EVENT_DATA_MAX_SIZE);
     struct Event event;
 
@@ -100,7 +101,8 @@ void otSimSendUartWriteEvent(const uint8_t *aData, uint16_t aLength) {
     otSimSendEvent(&event);
 }
 
-void otSimSendOtnsStatusPushEvent(const char *aStatus, uint16_t aLength) {
+void otSimSendOtnsStatusPushEvent(const char *aStatus, uint16_t aLength)
+{
     assert(aLength <= OT_EVENT_DATA_MAX_SIZE);
     struct Event event;
 
