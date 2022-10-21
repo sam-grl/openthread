@@ -75,8 +75,8 @@ static void handleSignal(int aSignal)
 
 static void receiveEvent(otInstance *aInstance)
 {
-    struct Event  event;
-    ssize_t       rval = recvfrom(sSockFd, (char *)&event, sizeof(event), 0, NULL, NULL);
+    struct Event   event;
+    ssize_t        rval   = recvfrom(sSockFd, (char *)&event, sizeof(event), 0, NULL, NULL);
     const uint8_t *evData = event.mData;
 
     if (rval < 0 || (uint16_t)rval < offsetof(struct Event, mData))

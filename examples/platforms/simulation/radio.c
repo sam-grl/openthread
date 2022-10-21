@@ -49,7 +49,6 @@
 // Declaration of radio functions
 void radioSendMessage(otInstance *aInstance);
 void radioTransmit(struct RadioMessage *aMessage, const struct otRadioFrame *aFrame);
-void setRadioState(otRadioState aState);
 void radioPrepareAck(void);
 bool IsTimeAfterOrEqual(uint32_t aTimeA, uint32_t aTimeB);
 void radioProcessFrame(otInstance *aInstance, otError aError);
@@ -66,6 +65,9 @@ static uint16_t sPortOffset = 0;
 static uint16_t sPort       = 0;
 
 static void initFds(void);
+void setRadioState(otRadioState aState);
+#else
+extern void setRadioState(otRadioState aState);    
 #endif // OPENTHREAD_SIMULATION_VIRTUAL_TIME
 
 // Definition of both real/virtual-time mode variables
@@ -346,7 +348,7 @@ void platformRadioInit(void)
     sReceiveFrame.mInfo.mRxInfo.mRssi = OT_RADIO_RSSI_INVALID;
 
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
-    otLinkMetricsInit(SIM_RECEIVE_SENSITIVITY);
+    otLinkMetricsInit(SIM_RECEIVE_SENSITIVITY_DBM);
 #endif
 }
 
@@ -834,6 +836,7 @@ otError otPlatRadioEnergyScan(otInstance *aInstance, uint8_t aScanChannel, uint1
     sEnergyScanResult  = OT_RADIO_RSSI_INVALID;
     sEnergyScanning    = true;
     sEnergyScanEndTime = otPlatAlarmMilliGetNow() + aScanDuration;
+    sCurrentChannel    = aScanChannel;
 
 exit:
     return error;
