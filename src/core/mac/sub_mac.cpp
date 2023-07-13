@@ -471,7 +471,7 @@ void SubMac::StartCsmaBackoff(void)
                     kCcaSampleInterval - kCslTransmitTimeAhead)
             {
                 mTimer.StartAt(Time(mTransmitFrame.mInfo.mTxInfo.mTxDelayBaseTime) - kCcaSampleInterval -
-                                   kCslTransmitTimeAhead,
+                                   kCslTransmitTimeAhead - kRadioHeaderShrDuration,
                                mTransmitFrame.mInfo.mTxInfo.mTxDelay);
             }
             else // Transmit without delay
