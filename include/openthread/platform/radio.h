@@ -270,10 +270,26 @@ typedef struct otRadioFrame
          */
         struct
         {
-            const otMacKeyMaterial *mAesKey;  ///< The key material used for AES-CCM frame security.
-            otRadioIeInfo          *mIeInfo;  ///< The pointer to the Header IE(s) related information.
-            uint32_t                mTxDelay; ///< The delay time for this transmission (based on `mTxDelayBaseTime`).
-            uint32_t                mTxDelayBaseTime; ///< The base time for the transmission delay.
+            const otMacKeyMaterial *mAesKey; ///< The key material used for AES-CCM frame security.
+            otRadioIeInfo          *mIeInfo; ///< The pointer to the Header IE(s) related information.
+
+            /**
+             * The base time in microseconds for scheduled transmissions
+             * relative to the local radio clock, see `otPlatTimeGet` and
+             * `mTxDelay`.
+             */
+            uint32_t mTxDelayBaseTime;
+
+            /**
+             * The delay time in microseconds for this transmission referenced
+             * to `mTxDelayBaseTime`.
+             *
+             * Note: `mTxDelayBaseTime` + `mTxDelay` SHALL point to the point in
+             * time when the end of the SFD will be present at the local
+             * antenna, relative to the local radio clock.
+             */
+            uint32_t mTxDelay;
+
             uint8_t mMaxCsmaBackoffs; ///< Maximum number of backoffs attempts before declaring CCA failure.
             uint8_t mMaxFrameRetries; ///< Maximum number of retries allowed after a transmission failure.
 
@@ -332,10 +348,8 @@ typedef struct otRadioFrame
         struct
         {
             /**
-             * The timestamp when the frame was received in microseconds.
-             *
-             * The value SHALL be the time when the SFD was received.
-             *
+             * The time of the local radio clock in microseconds when the end of
+             * the SFD was present at the local antenna.
              */
             uint64_t mTimestamp;
 
@@ -764,7 +778,8 @@ otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel);
  * Schedule a radio reception window at a specific time and duration.
  *
  * @param[in]  aChannel   The radio channel on which to receive.
- * @param[in]  aStart     The receive window start time, in microseconds.
+ * @param[in]  aStart     The receive window start time relative to the local
+ *                        radio clock, see `otPlatTimeGet`.
  * @param[in]  aDuration  The receive window duration, in microseconds
  *
  * @retval OT_ERROR_NONE    Successfully scheduled receive window.
@@ -1087,19 +1102,35 @@ otError otPlatRadioEnableCsl(otInstance         *aInstance,
 void otPlatRadioUpdateCslSampleTime(otInstance *aInstance, uint32_t aCslSampleTime);
 
 /**
- * Get the current accuracy, in units of ± ppm, of the clock used for scheduling CSL operations.
+ * Get the current estimated worst case accuracy (maximum ± deviation from the
+ * nominal frequency) of the clock used for scheduling CSL operations in units of PPM.
  *
- * @note Platforms may optimize this value based on operational conditions (i.e.: temperature).
+ * @note Implementations MAY estimate this value based on current operating
+ * conditions (e.g. temperature).
+ *
+ * In case the implementation does not estimate the current value but returns a
+ * fixed value, this value MUST be the worst-case accuracy over all possible
+ * foreseen operating conditions (temperature, pressure, etc) of the
+ * implementation.
  *
  * @param[in]   aInstance    A pointer to an OpenThread instance.
  *
- * @returns The current CSL rx/tx scheduling drift, in units of ± ppm.
+ * @returns The current CSL rx/tx scheduling drift, in PPM.
  *
  */
 uint8_t otPlatRadioGetCslAccuracy(otInstance *aInstance);
 
 /**
- * The fixed uncertainty of the Device for scheduling CSL Transmissions in units of 10 microseconds.
+ * The fixed uncertainty (i.e. random jitter) of the arrival time of CSL
+ * transmissions received by this device in units of 10 microseconds.
+ *
+ * This designates the worst case constant positive or negative devitation of
+ * the actual arrival time of a transmission from the transmission time
+ * calculated relative to the local radio clock independent of elapsed time. In
+ * addition to uncertainty accumulated over elapsed time, the CSL channel sample
+ * ("RX window") must be extended by twice this deviation such that an actual
+ * transmission is guaranteed to be detected by the local receiver in the
+ * presence of random arrival time jitter.
  *
  * @param[in]   aInstance    A pointer to an OpenThread instance.
  *
