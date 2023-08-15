@@ -1151,7 +1151,7 @@ void SubMac::HandleCslTimer(void)
      * ---|-----------|------------|-----------|-----------|------------|------------|----------//------------|---
      * -timeAhead     t1                    CslPhase                    t2       +timeAfter             -timeAhead
      *
-     * Note the timing references:
+     * Note the different time references:
      *  CslPhase - timeAhead  : time instant the radio needs to be turned on, to properly decode the earliest frame.
      *  t1                    : time instant the radio may receive the last symbol of SFD of the earliest frame.
      *  CslPhase              : end of last symbol of SFD of an ideally timed to-be-received frame.
@@ -1160,20 +1160,21 @@ void SubMac::HandleCslTimer(void)
      *
      * The handler works in different ways when the radio supports receive-timing and doesn't.
      *
-     * When the radio supports receive-timing:
+     * (1) When the radio supports receive-timing:
      *   The handler will be called once per CSL period. When the handler is called, it will set the timer to
      *   fire at the next CSL sample time and call `Radio::ReceiveAt` to start sampling for the current CSL period.
      *   The timer fires some time before the actual sample time. After `Radio::ReceiveAt` is called, the radio will
-     *   remain in sleep state until the actual sample time.
+     *   remain in sleep state until the actual sample time (when the platform activates the radio).
      *   Note that it never calls `Radio::Sleep` explicitly. The radio will fall into sleep after `ReceiveAt` ends. This
      *   will be done by the platform as part of the `otPlatRadioReceiveAt` API.
+     *   Note that the time required for receiving the frame's SHR (including SFD) is included in the "-Ahead-" part.
      *
      *   Timer fires                                         Timer fires
      *       ^                                                    ^
      *       x-|------------|-------------------------------------x-|------------|---------------------------------------|
      *            sample                   sleep                        sample                    sleep
      *
-     * When the radio doesn't support receive-timing:
+     * (2) When the radio doesn't support receive-timing:
      *   The handler will be called twice per CSL period: at the beginning of sample and sleep. When the handler is
      *   called, it will explicitly change the radio state due to the current state by calling `Radio::Receive` or
      *   `Radio::Sleep`. Note that the time for the radio to transition from its sleep state to being fully ready to

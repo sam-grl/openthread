@@ -52,18 +52,18 @@ extern "C" {
  */
 
 /**
- * Get the current time in microseconds referenced to a continuous monotonic
- * local radio clock (64 bits width).
+ * Get the current platform time in microseconds referenced to a continuous
+ * monotonic local clock (64 bits width).
  *
- * The radio clock SHALL NOT wrap during the device's uptime. Implementations
- * SHALL therefore identify and compensate for internal counter overflows. The
- * clock does not have a defined epoch and it SHALL NOT introduce any continuous
- * or discontinuous adjustments (e.g. leap seconds). Implementations SHALL
+ * The clock SHALL NOT wrap during the device's uptime. Implementations SHALL
+ * therefore identify and compensate for internal counter overflows. The clock
+ * does not have a defined epoch and it SHALL NOT introduce any continuous or
+ * discontinuous adjustments (e.g. leap seconds). Implementations SHALL
  * compensate for any sleep times of the device.
  *
- * Implementations MAY choose to discipline the radio clock and compensate for
- * sleep times by any means (e.g. by combining a high precision/low power RTC
- * with a high resolution counter) as long as the exposed combined clock
+ * Implementations MAY choose to discipline the platform clock and compensate
+ * for sleep times by any means (e.g. by combining a high precision/low power
+ * RTC with a high resolution counter) as long as the exposed combined clock
  * provides continuous monotonic microsecond resolution ticks within the
  * accuracy limits announced by @ref otPlatTimeGetXtalAccuracy.
  *
@@ -74,7 +74,7 @@ uint64_t otPlatTimeGet(void);
 
 /**
  * Get the current estimated worst case accuracy (maximum ± deviation from the
- * nominal frequency) of the local radio clock in units of PPM.
+ * nominal frequency) of the local platform clock in units of PPM.
  *
  * @note Implementations MAY estimate this value based on current operating
  * conditions (e.g. temperature).
@@ -84,7 +84,7 @@ uint64_t otPlatTimeGet(void);
  * foreseen operating conditions (temperature, pressure, etc) of the
  * implementation.
  *
- * @returns The current radio clock accuracy, in PPM.
+ * @returns The current platform clock accuracy, in PPM.
  *
  */
 uint16_t otPlatTimeGetXtalAccuracy(void);

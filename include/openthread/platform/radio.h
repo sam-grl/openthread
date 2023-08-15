@@ -275,7 +275,11 @@ typedef struct otRadioFrame
 
             /**
              * The base time in microseconds for scheduled transmissions
+<<<<<<< HEAD
              * relative to the local radio clock, see `otPlatTimeGet` and
+=======
+             * relative to the local radio clock, see `otPlatRadioGetNow` and
+>>>>>>> fgrandel/feat/standards-based-timing
              * `mTxDelay`.
              */
             uint32_t mTxDelayBaseTime;
@@ -666,14 +670,25 @@ void otPlatRadioSetMacFrameCounter(otInstance *aInstance, uint32_t aMacFrameCoun
 void otPlatRadioSetMacFrameCounterIfLarger(otInstance *aInstance, uint32_t aMacFrameCounter);
 
 /**
- * Get the current estimated time (in microseconds) of the radio chip.
+ * Get the current time in microseconds referenced to a continuous monotonic
+ * local radio clock (64 bits width).
  *
- * This microsecond timer must be a free-running timer. The timer must continue to advance with microsecond precision
- * even when the radio is in the sleep state.
+ * The radio clock SHALL NOT wrap during the device's uptime. Implementations
+ * SHALL therefore identify and compensate for internal counter overflows. The
+ * clock does not have a defined epoch and it SHALL NOT introduce any continuous
+ * or discontinuous adjustments (e.g. leap seconds). Implementations SHALL
+ * compensate for any sleep times of the device.
+ *
+ * Implementations MAY choose to discipline the radio clock and compensate for
+ * sleep times by any means (e.g. by combining a high precision/low power RTC
+ * with a high resolution counter) as long as the exposed combined clock
+ * provides continuous monotonic microsecond resolution ticks within the
+ * accuracy limits announced by @ref otPlatRadioGetCslAccuracy.
  *
  * @param[in]   aInstance    A pointer to an OpenThread instance.
  *
- * @returns The current time in microseconds. UINT64_MAX when platform does not support or radio time is not ready.
+ * @returns The current time in microseconds. UINT64_MAX when platform does not
+ * support or radio time is not ready.
  *
  */
 uint64_t otPlatRadioGetNow(otInstance *aInstance);
@@ -774,31 +789,22 @@ otError otPlatRadioSleep(otInstance *aInstance);
  */
 otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel);
 
-
 /**
  * Schedule a radio reception window at a specific time and duration.
  *
  * @param[in]  aChannel   The radio channel on which to receive.
- * @param[in]  aStart     The receive window start time relative to the local radio clock, see `otPlatTimeGet`.
- *                        The window start time is when the radio is on and ready to receive the first symbol of
- *                        the SHR.
- * @param[in]  aDuration  The receive window duration, in microseconds. The window end time is when the radio is
- *                        turned off (in case it is not actively receiving a frame at that moment).
- *
- * @retval OT_ERROR_NONE    Successfully scheduled receive window.
- * @retval OT_ERROR_FAILED  The receive window could not be scheduled.
- *
-otError otPlatRadioReceiveAt(otInstance *aInstance, uint8_t aChannel, uint32_t aStart, uint32_t aDuration);
-*/
-
-/**
- * Schedule a radio reception window at a specific time and duration.
- *
- * @param[in]  aChannel   The radio channel on which to receive.
- * @param[in]  aStart     The receive window start time relative to the local radio clock, see `otPlatTimeGet`.
- *                        The (SFD based) frame time reference is the same as for `mTimestamp`.
- * @param[in]  aDuration  The receive window duration, in microseconds. This is the time duration that the radio is
- *                        on.
+ * @param[in]  aStart     The receive window start time relative to the local
+ *                        radio clock, see `otPlatRadioGetNow`. The radio
+ *                        receiver SHALL be on and ready to receive the first
+ *                        symbol of a frame's SHR at the window start time.
+ * @param[in]  aDuration  The receive window duration, in microseconds, as
+ *                        measured by the local radio clock. The radio SHOULD
+ *                        be turned off after that duration unless it is
+ *                        still actively receiving a frame in which case it
+ *                        SHOULD be turned off after (1) frame reception has
+ *                        either successfully finished or failed and/or (2) if
+ *                        applicable, the ACK frame sent in response to the
+ *                        received frame has been transmitted.
  *
  * @retval OT_ERROR_NONE    Successfully scheduled receive window.
  * @retval OT_ERROR_FAILED  The receive window could not be scheduled.
@@ -1114,14 +1120,16 @@ otError otPlatRadioEnableCsl(otInstance         *aInstance,
  * Sample time is stored in radio driver as a copy to calculate phase when sending ACK with CSL IE.
  *
  * @param[in]  aInstance         The OpenThread instance structure.
- * @param[in]  aCslSampleTime    The latest sample time.
+ * @param[in]  aCslSampleTime    The next sample time, in microseconds. It references the time when the end of
+ *                               the last symbol of the SFD is expected.
  *
  */
 void otPlatRadioUpdateCslSampleTime(otInstance *aInstance, uint32_t aCslSampleTime);
 
 /**
  * Get the current estimated worst case accuracy (maximum ± deviation from the
- * nominal frequency) of the clock used for scheduling CSL operations in units of PPM.
+ * nominal frequency) of the local radio clock in units of PPM. This is the
+ * clock used to schedule CSL operations.
  *
  * @note Implementations MAY estimate this value based on current operating
  * conditions (e.g. temperature).
