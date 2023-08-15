@@ -275,11 +275,7 @@ typedef struct otRadioFrame
 
             /**
              * The base time in microseconds for scheduled transmissions
-<<<<<<< HEAD
-             * relative to the local radio clock, see `otPlatTimeGet` and
-=======
              * relative to the local radio clock, see `otPlatRadioGetNow` and
->>>>>>> fgrandel/feat/standards-based-timing
              * `mTxDelay`.
              */
             uint32_t mTxDelayBaseTime;
