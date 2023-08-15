@@ -202,7 +202,11 @@
 /**
  * @def OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US
  *
- * Define how many microseconds ahead should MAC deliver CSL frame to SubMac.
+ * Define how many microseconds ahead should MAC deliver CSL frame to SubMac, relative to
+ * the Tx timestamp of the CSL frame (which is defined as the end of last symbol of SFD).
+ * So this time period includes at least 1) the SHR duration, 2) the CCA duration,
+ * 3) turnaround time for radio to go from CCA to Tx; and 4) any time needed by the radio
+ * to wake from sleep, set the channel and be ready to perform CCA.
  *
  */
 #ifndef OPENTHREAD_CONFIG_MAC_CSL_REQUEST_AHEAD_US
