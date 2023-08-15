@@ -468,11 +468,11 @@ void SubMac::StartCsmaBackoff(void)
         {
             if (Time(static_cast<uint32_t>(otPlatRadioGetNow(&GetInstance()))) <
                 Time(mTransmitFrame.mInfo.mTxInfo.mTxDelayBaseTime) + mTransmitFrame.mInfo.mTxInfo.mTxDelay -
-                    kCcaSampleInterval - kCslTransmitTimeAhead)
+                    kCcaSampleInterval - kCslTransmitTimeAhead - kRadioHeaderShrDuration)
             {
-                mTimer.StartAt(Time(mTransmitFrame.mInfo.mTxInfo.mTxDelayBaseTime) - kCcaSampleInterval -
-                                   kCslTransmitTimeAhead - kRadioHeaderShrDuration,
-                               mTransmitFrame.mInfo.mTxInfo.mTxDelay);
+                mTimer.StartAt(Time(mTransmitFrame.mInfo.mTxInfo.mTxDelayBaseTime) -
+                    kCcaSampleInterval - kCslTransmitTimeAhead - kRadioHeaderShrDuration,
+                    mTransmitFrame.mInfo.mTxInfo.mTxDelay);
             }
             else // Transmit without delay
             {
@@ -1149,7 +1149,14 @@ void SubMac::HandleCslTimer(void)
      *    |<--Ahead-->|<--UnCert-->|<--Drift-->|<--Drift-->|<--UnCert-->|<--MinWin-->|                        |
      *    |           |            |           |           |            |            |                        |
      * ---|-----------|------------|-----------|-----------|------------|------------|----------//------------|---
-     * -timeAhead                           CslPhase                             +timeAfter             -timeAhead
+     * -timeAhead     t1                    CslPhase                    t2       +timeAfter             -timeAhead
+     *
+     * Note the timing references:
+     *  CslPhase - timeAhead  : time instant the radio needs to be turned on, to properly decode the earliest frame.
+     *  t1                    : time instant the radio may receive the last symbol of SFD of the earliest frame.
+     *  CslPhase              : end of last symbol of SFD of an ideally timed to-be-received frame.
+     *  t2                    : time instant the radio may receive the last symbol of SFD of the latest frame.
+     *  CslPhase + timeAfter  : time instant the radio will be turned off (platform-dependent, see below).
      *
      * The handler works in different ways when the radio supports receive-timing and doesn't.
      *
@@ -1158,7 +1165,7 @@ void SubMac::HandleCslTimer(void)
      *   fire at the next CSL sample time and call `Radio::ReceiveAt` to start sampling for the current CSL period.
      *   The timer fires some time before the actual sample time. After `Radio::ReceiveAt` is called, the radio will
      *   remain in sleep state until the actual sample time.
-     *   Note that it never call `Radio::Sleep` explicitly. The radio will fall into sleep after `ReceiveAt` ends. This
+     *   Note that it never calls `Radio::Sleep` explicitly. The radio will fall into sleep after `ReceiveAt` ends. This
      *   will be done by the platform as part of the `otPlatRadioReceiveAt` API.
      *
      *   Timer fires                                         Timer fires
@@ -1169,7 +1176,9 @@ void SubMac::HandleCslTimer(void)
      * When the radio doesn't support receive-timing:
      *   The handler will be called twice per CSL period: at the beginning of sample and sleep. When the handler is
      *   called, it will explicitly change the radio state due to the current state by calling `Radio::Receive` or
-     *   `Radio::Sleep`.
+     *   `Radio::Sleep`. Note that the time for the radio to transition from its sleep state to being fully ready to
+     *   receive the first symbol of the frame is included in the "-Ahead-" part of the Sample in the topmost diagram.
+     *   Also the time required for receiving the frame's SHR (including SFD) is included in the "-Ahead-" part.
      *
      *   Timer fires  Timer fires                            Timer fires  Timer fires
      *       ^            ^                                       ^            ^

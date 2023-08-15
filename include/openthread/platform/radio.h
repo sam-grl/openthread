@@ -774,13 +774,31 @@ otError otPlatRadioSleep(otInstance *aInstance);
  */
 otError otPlatRadioReceive(otInstance *aInstance, uint8_t aChannel);
 
+
 /**
  * Schedule a radio reception window at a specific time and duration.
  *
  * @param[in]  aChannel   The radio channel on which to receive.
- * @param[in]  aStart     The receive window start time relative to the local
- *                        radio clock, see `otPlatTimeGet`.
- * @param[in]  aDuration  The receive window duration, in microseconds
+ * @param[in]  aStart     The receive window start time relative to the local radio clock, see `otPlatTimeGet`.
+ *                        The window start time is when the radio is on and ready to receive the first symbol of
+ *                        the SHR.
+ * @param[in]  aDuration  The receive window duration, in microseconds. The window end time is when the radio is
+ *                        turned off (in case it is not actively receiving a frame at that moment).
+ *
+ * @retval OT_ERROR_NONE    Successfully scheduled receive window.
+ * @retval OT_ERROR_FAILED  The receive window could not be scheduled.
+ *
+otError otPlatRadioReceiveAt(otInstance *aInstance, uint8_t aChannel, uint32_t aStart, uint32_t aDuration);
+*/
+
+/**
+ * Schedule a radio reception window at a specific time and duration.
+ *
+ * @param[in]  aChannel   The radio channel on which to receive.
+ * @param[in]  aStart     The receive window start time relative to the local radio clock, see `otPlatTimeGet`.
+ *                        The (SFD based) frame time reference is the same as for `mTimestamp`.
+ * @param[in]  aDuration  The receive window duration, in microseconds. This is the time duration that the radio is
+ *                        on.
  *
  * @retval OT_ERROR_NONE    Successfully scheduled receive window.
  * @retval OT_ERROR_FAILED  The receive window could not be scheduled.
@@ -1124,7 +1142,7 @@ uint8_t otPlatRadioGetCslAccuracy(otInstance *aInstance);
  * The fixed uncertainty (i.e. random jitter) of the arrival time of CSL
  * transmissions received by this device in units of 10 microseconds.
  *
- * This designates the worst case constant positive or negative devitation of
+ * This designates the worst case constant positive or negative deviation of
  * the actual arrival time of a transmission from the transmission time
  * calculated relative to the local radio clock independent of elapsed time. In
  * addition to uncertainty accumulated over elapsed time, the CSL channel sample

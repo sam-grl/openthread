@@ -481,7 +481,8 @@
 /**
  * @def OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD
  *
- * Reception scheduling and ramp up time needed for the CSL receiver to be ready, in units of microseconds.
+ * Worst-case reception scheduling and ramp-up time needed for the CSL receiver to be ready to detect the first symbol
+ * of SHR of the frame, in units of microseconds.
  *
  */
 #ifndef OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD
@@ -491,12 +492,12 @@
 /**
  * @def OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD
  *
- * The minimum time (in microseconds) before the MHR start that the radio should be in receive state and ready to
- * properly receive in order to properly receive any IEEE 802.15.4 frame. Defaults to the duration of SHR + PHR.
+ * The minimum time (in microseconds) before the PHR start (SFD end) that the radio should be in receive state and
+ * ready to properly detect and receive any IEEE 802.15.4 frame. Defaults to the duration of SHR.
  *
  */
 #ifndef OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD
-#define OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD (6 * 32)
+#define OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD (5 * 32)
 #endif
 
 /**
@@ -505,7 +506,8 @@
  * The minimum time (in microseconds) after the MHR start that the radio should be in receive state in order
  * to properly receive any IEEE 802.15.4 frame. Defaults to the duration of a maximum size frame, plus AIFS,
  * plus the duration of maximum enh-ack frame. Platforms are encouraged to improve this value for energy
- * efficiency purposes.
+ * efficiency purposes. For example, if a radio platform automatically keeps the radio enabled if a frame
+ * is actively being received, then this value can be lowered substantially.
  *
  */
 #ifndef OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AFTER

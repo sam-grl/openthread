@@ -571,7 +571,8 @@ private:
     };
 
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
-    // Radio on times needed before and after MHR time for proper frame detection
+    // Radio on times needed before and after the time of end of last symbol of SFD, for proper frame detection.
+    // Values are in usec.
     static constexpr uint32_t kMinReceiveOnAhead = OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD;
     static constexpr uint32_t kMinReceiveOnAfter = OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AFTER;
 
