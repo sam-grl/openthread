@@ -485,8 +485,8 @@
 /**
  * @def OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD
  *
- * Worst-case reception scheduling and ramp-up time needed for the CSL receiver to be ready to detect the first symbol
- * of SHR of the frame, in units of microseconds.
+ * Worst-case reception scheduling and ramp-up time needed for the CSL receiver to be ready to detect the start of
+ * the first symbol of the SHR of the frame, in units of microseconds.
  *
  */
 #ifndef OPENTHREAD_CONFIG_CSL_RECEIVE_TIME_AHEAD
@@ -497,7 +497,8 @@
  * @def OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD
  *
  * The minimum time (in microseconds) before the PHR start (SFD end) that the radio should be in receive state and
- * ready to properly detect and receive any IEEE 802.15.4 frame. Defaults to the duration of SHR.
+ * ready to properly detect and receive any IEEE 802.15.4 frame. It MUST include at least the SHR time duration.
+ * Defaults to the duration of SHR.
  *
  */
 #ifndef OPENTHREAD_CONFIG_MIN_RECEIVE_ON_AHEAD

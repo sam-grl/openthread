@@ -301,12 +301,13 @@ void SubMac::LogReceived(RxFrame *aFrame)
     ahead -= kMinReceiveOnAhead + kCslReceiveTimeAhead;
 
     sampleTime = mCslSampleTime.GetValue() - mCslPeriod * kUsPerTenSymbols;
-    deviation  = aFrame->mInfo.mRxInfo.mTimestamp + kRadioHeaderPhrDuration - sampleTime;
+    deviation  = aFrame->mInfo.mRxInfo.mTimestamp - sampleTime;
 
     // This logs three values (all in microseconds):
-    // - Absolute sample time in which the CSL receiver expected the MHR of the received frame.
+    // - Absolute sample time in which the CSL receiver expected the start of PHR of the received frame, or
+    //   equivalently the completed reception of the SFD.
     // - Allowed margin around that time accounting for accuracy and uncertainty from both devices.
-    // - Real deviation on the reception of the MHR with regards to expected sample time. This can
+    // - Real deviation on the reception of the SFD with regards to expected sample time. This can
     //   be due to clocks drift and/or CSL Phase rounding error.
     // This means that a deviation absolute value greater than the margin would result in the frame
     // not being received out of the debug mode.
@@ -316,7 +317,7 @@ void SubMac::LogReceived(RxFrame *aFrame)
     // Treat as a warning when the deviation is not within the margins. Neither kCslReceiveTimeAhead
     // or kMinReceiveOnAhead/kMinReceiveOnAfter are considered for the margin since they have no
     // impact on understanding possible deviation errors between transmitter and receiver. So in this
-    // case ahead equals after.
+    // case `ahead` equals `after`.
     if ((deviation + ahead > 0) && (deviation < static_cast<int32_t>(ahead)))
     {
         LogDebg("%s", logString.AsCString());
