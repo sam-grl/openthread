@@ -1114,11 +1114,14 @@ otError otPlatRadioEnableCsl(otInstance         *aInstance,
  * Update CSL sample time in radio driver.
  *
  * Sample time is stored in radio driver as a copy to calculate phase when sending ACK with CSL IE.
+ * The CSL sample (window) of the CSL receiver extends before and after the sample time.
+ * The CSL sample time marks a timestamp in the CSL sample window when a frame should be
+ * received in "ideal conditions" if there would be no inaccuracy/clock-drift.
  *
  * @param[in]  aInstance         The OpenThread instance structure.
- * @param[in]  aCslSampleTime    The next sample time, in microseconds. It references the time when the end of
- *                               the last symbol of the SFD is expected.
- *
+ * @param[in]  aCslSampleTime    The next sample time, in microseconds. It is the time
+ *                               when the end of the last symbol of the SFD of the
+ *                               frame is expected.
  */
 void otPlatRadioUpdateCslSampleTime(otInstance *aInstance, uint32_t aCslSampleTime);
 

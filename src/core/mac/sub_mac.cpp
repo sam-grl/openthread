@@ -308,7 +308,7 @@ void SubMac::LogReceived(RxFrame *aFrame)
     //   equivalently the completed reception of the SFD.
     // - Allowed margin around that time accounting for accuracy and uncertainty from both devices.
     // - Real deviation on the reception of the SFD with regards to expected sample time. This can
-    //   be due to clocks drift and/or CSL Phase rounding error.
+    //   be due to clocks drift and/or inaccuracy and/or CSL Phase rounding error.
     // This means that a deviation absolute value greater than the margin would result in the frame
     // not being received out of the debug mode.
     logString.Append("Expected sample time %lu, margin ±%lu, deviation %d", ToUlong(sampleTime), ToUlong(ahead),
@@ -317,7 +317,7 @@ void SubMac::LogReceived(RxFrame *aFrame)
     // Treat as a warning when the deviation is not within the margins. Neither kCslReceiveTimeAhead
     // or kMinReceiveOnAhead/kMinReceiveOnAfter are considered for the margin since they have no
     // impact on understanding possible deviation errors between transmitter and receiver. So in this
-    // case `ahead` equals `after`.
+    // case only `ahead` is used, as an allowable max deviation in both +/- directions.
     if ((deviation + ahead > 0) && (deviation < static_cast<int32_t>(ahead)))
     {
         LogDebg("%s", logString.AsCString());
@@ -1215,7 +1215,7 @@ void SubMac::HandleCslTimer(void)
         }
         else
         {
-            mCslTimer.FireAt(mCslSampleTime + timeAfter);
+            mCslTimer.FireAt(mCslSampleTime - kRadioHeaderShrDuration + timeAfter);
             mIsCslSampling = true;
             winStart       = ot::TimerMicro::GetNow().GetValue();
         }
