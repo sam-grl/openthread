@@ -121,6 +121,17 @@ exit:
     return;
 }
 
+void Joiner::SetCcmIdentity(const uint8_t *aX509Cert,
+                            uint32_t       aX509Length,
+                            const uint8_t *aPrivateKey,
+                            uint32_t       aPrivateKeyLength,
+                            const uint8_t *aX509CaCertificateChain,
+                            uint32_t aX509CaCertChainLength)
+{
+    Get<Tmf::SecureAgent>().SetCertificate(aX509Cert, aX509Length, aPrivateKey, aPrivateKeyLength);
+    Get<Tmf::SecureAgent>().SetCaCertificateChain(aX509CaCertificateChain, aX509CaCertChainLength);
+}
+
 Error Joiner::Start(const char      *aPskd,
                     const char      *aProvisioningUrl,
                     const char      *aVendorName,
@@ -145,7 +156,10 @@ Error Joiner::Start(const char      *aPskd,
     VerifyOrExit(Get<ThreadNetif>().IsUp() && Get<Mle::Mle>().GetRole() == Mle::kRoleDisabled,
                  error = kErrorInvalidState);
 
-    SuccessOrExit(error = joinerPskd.SetFrom(aPskd));
+    if (aPskd != nullptr)
+    {
+        SuccessOrExit(error = joinerPskd.SetFrom(aPskd));
+    }
 
     // Use random-generated extended address.
     randomAddress.GenerateRandom();
@@ -153,7 +167,10 @@ Error Joiner::Start(const char      *aPskd,
     Get<Mle::MleRouter>().UpdateLinkLocalAddress();
 
     SuccessOrExit(error = Get<Tmf::SecureAgent>().Start(kJoinerUdpPort));
-    Get<Tmf::SecureAgent>().SetPsk(joinerPskd);
+    if (aPskd != nullptr)
+    {
+        Get<Tmf::SecureAgent>().SetPsk(joinerPskd);
+    }
 
     for (JoinerRouter &router : mJoinerRouters)
     {

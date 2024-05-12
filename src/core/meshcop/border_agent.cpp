@@ -410,16 +410,35 @@ template <> void BorderAgent::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, co
 
     Coap::Message *message = nullptr;
     Error          error   = kErrorNone;
+    uint16_t                 joinerPort;
 
     VerifyOrExit(mState != kStateStopped);
 
     VerifyOrExit(aMessage.IsNonConfirmablePostRequest(), error = kErrorDrop);
 
-    message = Get<Tmf::SecureAgent>().NewPriorityNonConfirmablePostMessage(kUriRelayRx);
-    VerifyOrExit(message != nullptr, error = kErrorNoBufs);
+    // determine type of relaying, based on Relay Type ID (in Joiner's UDP source port)
+    // TODO only do this when CCM flag is 1 in Security Policy
+    // TODO get stored context based on Joiner IID / port etc -> allow pure DTLS to go outside BA.
+    SuccessOrExit(error = Tlv::Find<JoinerUdpPortTlv>(aMessage, joinerPort));
+    switch(joinerPort & 0x000f) {
+    case 2: // BRSKI
+        // create new UDP message to Registrar - with DTLS payload in.
+        // TODO
+        message = Get<Tmf::SecureAgent>().NewPriorityNonConfirmablePostMessage(kUriRelayRx);
+        VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
-    SuccessOrExit(error = ForwardToCommissioner(*message, aMessage));
-    LogInfo("Sent to commissioner on RelayRx (c/rx)");
+        SuccessOrExit(error = ForwardToRegistrar(*message, aMessage));
+        LogInfo("Sent to Registrar on RelayRx (c/rx)");
+        break;
+    case 9: // MeshCoP
+        message = Get<Tmf::SecureAgent>().NewPriorityNonConfirmablePostMessage(kUriRelayRx);
+        VerifyOrExit(message != nullptr, error = kErrorNoBufs);
+
+        SuccessOrExit(error = ForwardToCommissioner(*message, aMessage));
+        LogInfo("Sent to commissioner on RelayRx (c/rx)");
+        break;
+    }
+
 
 exit:
     FreeMessageOnError(message, error);
@@ -437,6 +456,21 @@ Error BorderAgent::ForwardToCommissioner(Coap::Message &aForwardMessage, const M
 
 exit:
     LogWarnOnError(error, "send to commissioner");
+    return error;
+}
+
+Error BorderAgent::ForwardToRegistrar(Coap::Message &aForwardMessage, const Message &aMessage)
+{
+    Error error;
+
+    SuccessOrExit(error = aForwardMessage.AppendBytesFromMessage(aMessage, aMessage.GetOffset(),
+                                                                 aMessage.GetLength() - aMessage.GetOffset()));
+    SuccessOrExit(error = SendMessage(aForwardMessage));
+
+    LogInfo("Sent to Registrar");
+
+exit:
+    LogWarnOnError(error, "send to Registrar");
     return error;
 }
 

@@ -172,6 +172,16 @@ public:
     Error ClearDiscerner(void);
 
     /**
+     * FIXME comments insert here from coap_secure.hpp
+     */
+    void SetCcmIdentity(const uint8_t *aX509Cert,
+                        uint32_t       aX509Length,
+                        const uint8_t *aPrivateKey,
+                        uint32_t       aPrivateKeyLength,
+                        const uint8_t *aX509CaCertificateChain,
+                        uint32_t aX509CaCertChainLength);
+
+    /**
      * Converts a given Joiner state to its human-readable string representation.
      *
      * @param[in] aState  The Joiner state to convert.
