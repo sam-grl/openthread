@@ -98,6 +98,12 @@ exit:
     return;
 }
 
+void Commissioner::UpdateCommissioningExtMode()
+{
+    const SecurityPolicy &secPolicy = Get<KeyManager>().GetSecurityPolicy();
+    this->mCommissioningExtensionsMode = secPolicy.mCommercialCommissioningEnabled;
+}
+
 void Commissioner::SignalJoinerEvent(JoinerEvent aEvent, const Joiner *aJoiner) const
 {
     otJoinerInfo    joinerInfo;
@@ -292,6 +298,7 @@ Error Commissioner::Start(StateCallback aStateCallback, JoinerCallback aJoinerCa
     mStateCallback.Set(aStateCallback, aCallbackContext);
     mJoinerCallback.Set(aJoinerCallback, aCallbackContext);
     mTransmitAttempts = 0;
+    this->UpdateCommissioningExtMode();
 
     SuccessOrExit(error = SendPetition());
     SetState(kStatePetition);
@@ -330,6 +337,7 @@ Error Commissioner::Stop(ResignMode aResignMode)
     }
 
     mTimer.Stop();
+    mCommissioningExtensionsMode = false;
 
     SetState(kStateDisabled);
 
@@ -908,6 +916,7 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
     Ip6::MessageInfo         joinerMessageInfo;
     uint16_t                 startOffset;
     uint16_t                 endOffset;
+    Coap::Message            *message = nullptr;
 
     VerifyOrExit(mState == kStateActive, error = kErrorInvalidState);
 
@@ -919,6 +928,28 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
 
     SuccessOrExit(
         error = Tlv::FindTlvValueStartEndOffsets(aMessage, Tlv::kJoinerDtlsEncapsulation, startOffset, endOffset));
+
+    // determine type of relaying, based on Relay Type ID (in Joiner's UDP source port)
+    // TODO get stored context based on Joiner IID / port etc -> allow pure DTLS to go outside BA.
+    LogDebg("FIXME making joinerPort based decision ccmMode=%d", mCommissioningExtensionsMode);
+    if (mCommissioningExtensionsMode)
+    {
+        switch (joinerPort & 0x000f)
+        {
+        case 1: // CCM-BRSKI
+            // create new UDP message to Registrar - with DTLS payload in.
+            // TODO
+            message = Get<Tmf::SecureAgent>().NewPriorityNonConfirmablePostMessage(kUriRelayRx);
+            VerifyOrExit(message != nullptr, error = kErrorNoBufs);
+
+            SuccessOrExit(error = ForwardToRegistrar(*message, aMessage));
+            LogInfo("Sent to Registrar on RelayRx (c/rx)");
+            ExitNow(); // no handling by local Commissioner.
+            break;
+        default: // in case unrecognized or MeshCop
+            break;
+        }
+    }
 
     if (!Get<Tmf::SecureAgent>().IsConnectionActive())
     {
@@ -985,6 +1016,7 @@ void Commissioner::HandleTmf<kUriDatasetChanged>(Coap::Message &aMessage, const 
     VerifyOrExit(aMessage.IsConfirmablePostRequest());
 
     LogInfo("Received %s", UriToString<kUriDatasetChanged>());
+    this->UpdateCommissioningExtMode();
 
     SuccessOrExit(Get<Tmf::Agent>().SendEmptyAck(aMessage, aMessageInfo));
 
@@ -1122,6 +1154,27 @@ Error Commissioner::SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo 
 
 exit:
     FreeMessageOnError(message, error);
+    return error;
+}
+
+Error Commissioner::ForwardToRegistrar(Coap::Message &aForwardMessage, const Message &aMessage)
+{
+    Error error;
+    Ip6::MessageInfo msgInfo = Ip6::MessageInfo();
+    Ip6::Address registrarIp6Address = Ip6::Address();
+
+    SuccessOrExit(error = aForwardMessage.AppendBytesFromMessage(aMessage, aMessage.GetOffset(),
+                                                                 aMessage.GetLength() - aMessage.GetOffset()));
+    SuccessOrExit(error = registrarIp6Address.FromString("910b::1234")); // FIXME hardcoded
+    msgInfo.SetPeerAddr(registrarIp6Address);
+    msgInfo.SetPeerPort(5683); // FIXME hardcoded
+    msgInfo.SetIsHostInterface(true);
+    SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(aForwardMessage, msgInfo));
+
+    LogInfo("Sent to Registrar");
+
+exit:
+    LogWarnOnError(error, "send to Registrar");
     return error;
 }
 

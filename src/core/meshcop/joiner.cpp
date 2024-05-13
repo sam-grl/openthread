@@ -159,6 +159,9 @@ Error Joiner::Start(const char      *aPskd,
     if (aPskd != nullptr)
     {
         SuccessOrExit(error = joinerPskd.SetFrom(aPskd));
+        mJoinerSourcePort = kMeshcopJoinerUdpSourcePort;
+    }else{
+        mJoinerSourcePort = kCcmBrskiJoinerUdpSourcePort; // FIXME other types
     }
 
     // Use random-generated extended address.
@@ -166,7 +169,7 @@ Error Joiner::Start(const char      *aPskd,
     Get<Mac::Mac>().SetExtAddress(randomAddress);
     Get<Mle::MleRouter>().UpdateLinkLocalAddress();
 
-    SuccessOrExit(error = Get<Tmf::SecureAgent>().Start(kJoinerUdpPort));
+    SuccessOrExit(error = Get<Tmf::SecureAgent>().Start(mJoinerSourcePort));
     if (aPskd != nullptr)
     {
         Get<Tmf::SecureAgent>().SetPsk(joinerPskd);
@@ -227,7 +230,7 @@ void Joiner::Finish(Error aError)
     case kStateEntrust:
     case kStateJoined:
         Get<Tmf::SecureAgent>().Disconnect();
-        IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(kJoinerUdpPort));
+        IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(mJoinerSourcePort));
         mTimer.Stop();
 
         OT_FALL_THROUGH;
@@ -386,7 +389,7 @@ Error Joiner::Connect(JoinerRouter &aRouter)
 
     Get<Mac::Mac>().SetPanId(aRouter.mPanId);
     SuccessOrExit(error = Get<Mac::Mac>().SetPanChannel(aRouter.mChannel));
-    SuccessOrExit(error = Get<Ip6::Filter>().AddUnsecurePort(kJoinerUdpPort));
+    SuccessOrExit(error = Get<Ip6::Filter>().AddUnsecurePort(mJoinerSourcePort));
 
     sockAddr.GetAddress().SetToLinkLocalAddress(aRouter.mExtAddr);
 
@@ -530,7 +533,7 @@ void Joiner::HandleJoinerFinalizeResponse(Coap::Message *aMessage, const Ip6::Me
 
 exit:
     Get<Tmf::SecureAgent>().Disconnect();
-    IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(kJoinerUdpPort));
+    IgnoreError(Get<Ip6::Filter>().RemoveUnsecurePort(mJoinerSourcePort));
 }
 
 template <> void Joiner::HandleTmf<kUriJoinerEntrust>(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo)

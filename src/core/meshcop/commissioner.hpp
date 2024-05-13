@@ -453,6 +453,7 @@ private:
 
     static Error SendRelayTransmit(void *aContext, Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
     Error        SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    Error        ForwardToRegistrar(Coap::Message &aForwardMessage, const Message &aMessage);
 
     void  ComputeBloomFilter(SteeringData &aSteeringData) const;
     void  SendCommissionerSet(void);
@@ -461,6 +462,7 @@ private:
     void  SendKeepAlive(uint16_t aSessionId);
 
     void SetState(State aState);
+    void UpdateCommissioningExtMode();
     void SignalJoinerEvent(JoinerEvent aEvent, const Joiner *aJoiner) const;
     void LogJoinerEntry(const char *aAction, const Joiner &aJoiner) const;
 
@@ -492,6 +494,7 @@ private:
     CommissionerIdTlv::StringType  mCommissionerId;
 
     State mState;
+    bool  mCommissioningExtensionsMode;
 
     Callback<StateCallback>  mStateCallback;
     Callback<JoinerCallback> mJoinerCallback;
