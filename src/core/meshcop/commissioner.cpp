@@ -931,7 +931,6 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
 
     // determine type of relaying, based on Relay Type ID (in Joiner's UDP source port)
     // TODO get stored context based on Joiner IID / port etc -> allow pure DTLS to go outside BA.
-    LogDebg("FIXME making joinerPort based decision ccmMode=%d", mCommissioningExtensionsMode);
     if (mCommissioningExtensionsMode)
     {
         switch (joinerPort & 0x000f)

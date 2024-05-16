@@ -1089,7 +1089,6 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
     forwardThread = false;
     forwardHost   = false;
 
-    LogDebg("FIXME Ip6::HandleDatagram");
     SuccessOrExit(error = header.ParseFrom(*aMessagePtr));
 
     messageInfo.Clear();
@@ -1134,12 +1133,10 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
 
         if (Get<ThreadNetif>().HasUnicastAddress(header.GetDestination()))
         {
-            LogDebg("FIXME Ip6::HandleDatagram unicast");
             receive = true;
         }
         else if (!aMessagePtr->IsOriginThreadNetif() || !header.GetDestination().IsLinkLocal())
         {
-            LogDebg("FIXME Ip6::HandleDatagram else if");
             if (header.GetDestination().IsLinkLocal())
             {
                 forwardThread = true;
@@ -1160,17 +1157,14 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
 
             forwardHost = !forwardThread;
         }
-        LogDebg("FIXME Ip6::HandleDatagram code end");
     }
 
     aMessagePtr->SetOffset(sizeof(header));
 
     // Process IPv6 Extension Headers
-    LogDebg("FIXME Ip6::HandleDatagram extension headers");
     nextHeader = static_cast<uint8_t>(header.GetNextHeader());
     SuccessOrExit(error = HandleExtensionHeaders(aMessagePtr, messageInfo, header, nextHeader, receive));
 
-    LogDebg("FIXME Ip6::HandleDatagram check proto ip6");
     if (receive && (nextHeader == kProtoIp6))
     {
         // Process the embedded IPv6 message in an IPv6 tunnel message.
@@ -1179,7 +1173,6 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
         // itself and use it directly. The encapsulating header is
         // then removed before processing the embedded message.
 
-        LogDebg("FIXME Ip6::HandleDatagram check proto ip6 embedded");
         OwnedPtr<Message> messagePtr;
         bool              multicastLoop = aMessagePtr->GetMulticastLoop();
 
@@ -1196,10 +1189,8 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
         forwardHost = false;
     }
 
-    LogDebg("FIXME Ip6::HandleDatagram check forwardhost = %u   receive = %u", forwardHost, receive);
     if ((forwardHost || receive) && !aIsReassembled)
     {
-        LogDebg("FIXME Ip6::HandleDatagram forwardHost || receive");
         error = PassToHost(aMessagePtr, messageInfo, nextHeader,
                            /* aApplyFilter */ !forwardHost, receive,
                            (receive || forwardThread) ? Message::kCopyToUse : Message::kTakeCustody);
@@ -1207,15 +1198,12 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
 
     if (receive)
     {
-        LogDebg("FIXME Ip6::HandleDatagram if receive");
         error = HandlePayload(header, aMessagePtr, messageInfo, nextHeader,
                               forwardThread ? Message::kCopyToUse : Message::kTakeCustody);
     }
 
-    LogDebg("FIXME Ip6::HandleDatagram forwardthread = %u", forwardThread);
     if (forwardThread)
     {
-        LogDebg("FIXME Ip6::HandleDatagram forwardthread");
         if (aMessagePtr->IsOriginThreadNetif())
         {
             VerifyOrExit(Get<Mle::Mle>().IsRouterOrLeader());
@@ -1226,7 +1214,6 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
 
         aMessagePtr->Write<uint8_t>(Header::kHopLimitFieldOffset, header.GetHopLimit());
 
-        LogDebg("FIXME Ip6::HandleDatagram check nextHeader = %u", nextHeader);
         if (nextHeader == kProtoIcmp6)
         {
             uint8_t icmpType;
@@ -1269,7 +1256,6 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
 #if !OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
         if (aMessagePtr->IsOriginHostTrusted() && !aMessagePtr->IsLoopbackToHostAllowed() && (nextHeader == kProtoUdp))
         {
-            LogDebg("FIXME Ip6::HandleDatagram isOriginHosttrusted() if");
             uint16_t destPort;
 
             SuccessOrExit(
@@ -1291,7 +1277,6 @@ Error Ip6::HandleDatagram(OwnedPtr<Message> aMessagePtr, bool aIsReassembled)
         aMessagePtr->ClearRadioType();
 #endif
 
-        LogDebg("FIXME Ip6::HandleDatagram sending to MeshForwarder");
         Get<MeshForwarder>().SendMessage(aMessagePtr.PassOwnership());
     }
 

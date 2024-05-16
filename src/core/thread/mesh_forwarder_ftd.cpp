@@ -54,7 +54,6 @@ void MeshForwarder::SendMessage(OwnedPtr<Message> aMessagePtr)
     message.SetDatagramTag(0);
     message.SetTimestampToNow();
     mSendQueue.Enqueue(message);
-    LogDebg("FIXME SendMessage processing type: %u", message.GetType());
 
     switch (message.GetType())
     {
