@@ -937,12 +937,13 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
         {
         case 1: // CCM-BRSKI
             // create new UDP message to Registrar - with DTLS payload in.
-            // TODO
-            message = Get<BackboneRouter::BackboneTmfAgent>().NewConfirmablePostMessage(kUriWellknownThreadRelayRx);
+            // TODO may use BackboneRouter::BackboneTmfAgent
+            message = Get<Tmf::Agent>().NewNonConfirmablePostMessage(kUriWellknownThreadRelayRx);
             VerifyOrExit(message != nullptr, error = kErrorNoBufs);
 
             SuccessOrExit(error = ForwardToRegistrar(*message, aMessage));
             LogInfo("Sent to Registrar on RelayRx (%s)", PathForUri(kUriWellknownThreadRelayRx));
+
             ExitNow(); // no handling by local Commissioner.
             break;
         default: // in case unrecognized or MeshCop
@@ -995,7 +996,9 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
     Get<Tmf::SecureAgent>().HandleUdpReceive(aMessage, joinerMessageInfo);
 
 exit:
-    return;
+    if (message != nullptr) {
+        message->Free();
+    }
 }
 
 void Commissioner::HandleJoinerSessionTimer(void)
@@ -1173,7 +1176,7 @@ Error Commissioner::ForwardToRegistrar(Coap::Message &aForwardMessage, const Mes
     LogInfo("Sent to Registrar");
 
 exit:
-    LogWarnOnError(error, "send to Registrar");
+    LogWarnOnError(error, "send to Registrar done");
     return error;
 }
 

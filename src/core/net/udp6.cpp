@@ -47,6 +47,8 @@
 namespace ot {
 namespace Ip6 {
 
+RegisterLogModule("udp6");
+
 bool Udp::SocketHandle::Matches(const MessageInfo &aMessageInfo) const
 {
     bool matches = false;
@@ -504,11 +506,13 @@ void Udp::HandlePayload(Message &aMessage, MessageInfo &aMessageInfo)
         }
         else
         {
+            LogDebg("FIXME scanning backbone sockets");
             socketsBegin = GetBackboneSockets();
             socketsEnd   = nullptr;
         }
 
         socket = mSockets.FindMatching(socketsBegin, socketsEnd, aMessageInfo, prev);
+        LogDebg("FIXME scanning backbone socket found = %u", socket->GetSockName().GetPort());
     }
 #else
     socket = mSockets.FindMatching(aMessageInfo, prev);
