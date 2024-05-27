@@ -146,6 +146,7 @@ set(COMMON_SOURCES
     meshcop/announce_begin_client.cpp
     meshcop/border_agent.cpp
     meshcop/commissioner.cpp
+    meshcop/commissioner_ccm.cpp
     meshcop/dataset.cpp
     meshcop/dataset_local.cpp
     meshcop/dataset_manager.cpp

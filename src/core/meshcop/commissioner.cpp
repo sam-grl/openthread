@@ -916,7 +916,6 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
     Ip6::MessageInfo         joinerMessageInfo;
     uint16_t                 startOffset;
     uint16_t                 endOffset;
-    Coap::Message            *message = nullptr;
 
     VerifyOrExit(mState == kStateActive, error = kErrorInvalidState);
 
@@ -936,16 +935,8 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
         switch (joinerPort & 0x000f)
         {
         case 1: // CCM-BRSKI
-            // create new UDP message to Registrar - with DTLS payload in.
-            // TODO may use BackboneRouter::BackboneTmfAgent
-            message = Get<Tmf::Agent>().NewNonConfirmablePostMessage(kUriWellknownThreadRelayRx);
-            VerifyOrExit(message != nullptr, error = kErrorNoBufs);
-
-            SuccessOrExit(error = ForwardToRegistrar(*message, aMessage));
-            LogInfo("Sent to Registrar on RelayRx (%s)", PathForUri(kUriWellknownThreadRelayRx));
-
+            this->SendBrskiRelayTransmit(aMessage, aMessageInfo, joinerPort, joinerIid, joinerRloc);
             ExitNow(); // no handling by local Commissioner.
-            break;
         default: // in case unrecognized or MeshCop
             break;
         }
@@ -996,9 +987,7 @@ template <> void Commissioner::HandleTmf<kUriRelayRx>(Coap::Message &aMessage, c
     Get<Tmf::SecureAgent>().HandleUdpReceive(aMessage, joinerMessageInfo);
 
 exit:
-    if (message != nullptr) {
-        message->Free();
-    }
+    return;
 }
 
 void Commissioner::HandleJoinerSessionTimer(void)
@@ -1156,27 +1145,6 @@ Error Commissioner::SendRelayTransmit(Message &aMessage, const Ip6::MessageInfo 
 
 exit:
     FreeMessageOnError(message, error);
-    return error;
-}
-
-Error Commissioner::ForwardToRegistrar(Coap::Message &aForwardMessage, const Message &aMessage)
-{
-    Error error;
-    Ip6::MessageInfo msgInfo = Ip6::MessageInfo();
-    Ip6::Address registrarIp6Address = Ip6::Address();
-
-    SuccessOrExit(error = aForwardMessage.AppendBytesFromMessage(aMessage, aMessage.GetOffset(),
-                                                                 aMessage.GetLength() - aMessage.GetOffset()));
-    SuccessOrExit(error = registrarIp6Address.FromString("910b::1234")); // FIXME hardcoded
-    msgInfo.SetPeerAddr(registrarIp6Address);
-    msgInfo.SetPeerPort(5683); // FIXME hardcoded
-    msgInfo.SetIsHostInterface(true);
-    SuccessOrExit(error = Get<Tmf::Agent>().SendMessage(aForwardMessage, msgInfo));
-
-    LogInfo("Sent to Registrar");
-
-exit:
-    LogWarnOnError(error, "send to Registrar done");
     return error;
 }
 
