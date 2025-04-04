@@ -240,26 +240,31 @@ public:
      */
     void SetRxOnWhenIdle(bool aRxOnWhenIdle);
 
-    /**
-     * Sets the scan parameters for MLE Discovery Request messages.
-     *
-     * @param[in]  aScanChannels  A reference to channel mask indicating which channels to scan.
-     *                            If @p aScanChannels is empty, then all channels are used instead.
-     *
-     */
-    void SetDiscoverParameters(const Mac::ChannelMask &aScanChannels);
-
 #if OPENTHREAD_FTD
+
     /**
-     * Frees any messages queued for an existing child.
+     * Represents a predicate function for checking if a given `Message` meets specific criteria.
      *
-     * @param[in]  aChild    A reference to the child.
-     * @param[in]  aSubType  The message sub-type to remove.
-     *                       Use Message::kSubTypeNone remove all messages for @p aChild.
+     * @param[in] aMessage The message to evaluate.
+     *
+     * @return TRUE   If the @p aMessage satisfies the predicate condition.
+     * @return FALSE  If the @p aMessage does not satisfy the predicate condition.
      *
      */
-    void RemoveMessages(Child &aChild, Message::SubType aSubType);
-#endif
+    typedef bool (&MessageChecker)(const Message &aMessage);
+
+    /**
+     * Removes and frees messages queued for a child, based on a given predicate.
+     *
+     * The `aChild` can be either sleepy or non-sleepy.
+     *
+     * @param[in] aChild            The child whose messages are to be evaluated.
+     * @param[in] aMessageChecker   The predicate function to filter messages.
+     *
+     */
+    void RemoveMessagesForChild(Child &aChild, MessageChecker aMessageChecker);
+
+#endif // OPENTHREAD_FTD
 
     /**
      * Frees unicast/multicast MLE Data Responses from Send Message Queue if any.
@@ -413,11 +418,29 @@ private:
 #endif
     };
 
-    enum AnycastType : uint8_t
+    struct RxInfo : public InstanceLocator
     {
-        kAnycastDhcp6Agent,
-        kAnycastNeighborDiscoveryAgent,
-        kAnycastService,
+        static constexpr uint16_t kInfoStringSize = 70;
+
+        typedef String<kInfoStringSize> InfoString;
+
+        explicit RxInfo(Instance &aInstance)
+            : InstanceLocator(aInstance)
+            , mParsedIp6Headers(false)
+        {
+        }
+
+        const Mac::Address &GetSrcAddr(void) const { return mMacAddrs.mSource; }
+        const Mac::Address &GetDstAddr(void) const { return mMacAddrs.mDestination; }
+        bool                IsLinkSecurityEnabled(void) const { return mLinkInfo.IsLinkSecurityEnabled(); }
+        Error               ParseIp6Headers(void);
+        InfoString          ToString(void) const;
+
+        FrameData      mFrameData;
+        ThreadLinkInfo mLinkInfo;
+        Mac::Addresses mMacAddrs;
+        Ip6::Headers   mIp6Headers;
+        bool           mParsedIp6Headers;
     };
 
 #if OPENTHREAD_FTD
@@ -500,18 +523,17 @@ private:
 #endif
 
     void     SendIcmpErrorIfDstUnreach(const Message &aMessage, const Mac::Addresses &aMacAddrs);
-    Error    CheckReachability(const FrameData &aFrameData, const Mac::Addresses &aMeshAddrs);
-    void     UpdateRoutes(const FrameData &aFrameData, const Mac::Addresses &aMeshAddrs);
-    Error    FrameToMessage(const FrameData      &aFrameData,
-                            uint16_t              aDatagramSize,
-                            const Mac::Addresses &aMacAddrs,
-                            Message             *&aMessage);
+    Error    CheckReachability(RxInfo &aRxInfo);
+    Error    CheckReachability(uint16_t aMeshDest, const Ip6::Header &aIp6Header);
+    void     UpdateRoutes(RxInfo &aRxInfo);
+    Error    FrameToMessage(RxInfo &aRxInfo, uint16_t aDatagramSize, Message *&aMessage);
     void     GetMacDestinationAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
     void     GetMacSourceAddress(const Ip6::Address &aIp6Addr, Mac::Address &aMacAddr);
     Message *PrepareNextDirectTransmission(void);
-    void     HandleMesh(FrameData &aFrameData, const Mac::Address &aMacSource, const ThreadLinkInfo &aLinkInfo);
-    void     HandleFragment(FrameData &aFrameData, const Mac::Addresses &aMacAddrs, const ThreadLinkInfo &aLinkInfo);
-    void HandleLowpanHC(const FrameData &aFrameData, const Mac::Addresses &aMacAddrs, const ThreadLinkInfo &aLinkInfo);
+    void     HandleMesh(RxInfo &aRxInfo);
+    void     ResolveRoutingLoops(uint16_t aSourceRloc16, uint16_t aDestRloc16);
+    void     HandleFragment(RxInfo &aRxInfo);
+    void     HandleLowpanHc(RxInfo &aRxInfo);
 
     void     PrepareMacHeaders(Mac::TxFrame             &aFrame,
                                Mac::Frame::Type          aFrameType,
@@ -542,8 +564,6 @@ private:
     void  SendDestinationUnreachable(uint16_t aMeshSource, const Ip6::Headers &aIp6Headers);
     Error UpdateIp6Route(Message &aMessage);
     Error UpdateIp6RouteFtd(const Ip6::Header &aIp6Header, Message &aMessage);
-    void  EvaluateRoutingCost(uint16_t aDest, uint8_t &aBestCost, uint16_t &aBestDest) const;
-    Error AnycastRouteLookup(uint8_t aServiceId, AnycastType aType, uint16_t &aMeshDest) const;
     Error UpdateMeshRoute(Message &aMessage);
     bool  UpdateReassemblyList(void);
     void  UpdateFragmentPriority(Lowpan::FragmentHeader &aFragmentHeader,
@@ -570,13 +590,11 @@ private:
     void HandleTimeTick(void);
     void ScheduleTransmissionTask(void);
 
-    Error GetFramePriority(const FrameData &aFrameData, const Mac::Addresses &aMacAddrs, Message::Priority &aPriority);
+    Error GetFramePriority(RxInfo &aRxInfo, Message::Priority &aPriority);
     Error GetFragmentPriority(Lowpan::FragmentHeader &aFragmentHeader,
                               uint16_t                aSrcRloc16,
                               Message::Priority      &aPriority);
-    void  GetForwardFramePriority(const FrameData      &aFrameData,
-                                  const Mac::Addresses &aMeshAddrs,
-                                  Message::Priority    &aPriority);
+    void  GetForwardFramePriority(RxInfo &aRxInfo, Message::Priority &aPriority);
 
     bool                CalcIePresent(const Message *aMessage);
     Mac::Frame::Version CalcFrameVersion(const Neighbor *aNeighbor, bool aIePresent) const;
@@ -595,12 +613,8 @@ private:
     void LogMessage(MessageAction aAction, const Message &aMessage, Error aError);
     void LogMessage(MessageAction aAction, const Message &aMessage, Error aError, const Mac::Address *aAddress);
     void LogFrame(const char *aActionText, const Mac::Frame &aFrame, Error aError);
-    void LogFragmentFrameDrop(Error                         aError,
-                              uint16_t                      aFrameLength,
-                              const Mac::Addresses         &aMacAddrs,
-                              const Lowpan::FragmentHeader &aFragmentHeader,
-                              bool                          aIsSecure);
-    void LogLowpanHcFrameDrop(Error aError, uint16_t aFrameLength, const Mac::Addresses &aMacAddrs, bool aIsSecure);
+    void LogFragmentFrameDrop(Error aError, const RxInfo &aRxInfo, const Lowpan::FragmentHeader &aFragmentHeader);
+    void LogLowpanHcFrameDrop(Error aError, const RxInfo &aRxInfo);
 
 #if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_NOTE)
     const char *MessageActionToString(MessageAction aAction, Error aError);

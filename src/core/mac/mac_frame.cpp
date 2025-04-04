@@ -47,19 +47,13 @@
 namespace ot {
 namespace Mac {
 
-void HeaderIe::Init(uint16_t aId, uint8_t aLen)
-{
-    Init();
-    SetId(aId);
-    SetLength(aLen);
-}
-
 void Frame::InitMacHeader(Type             aType,
                           Version          aVersion,
                           const Addresses &aAddrs,
                           const PanIds    &aPanIds,
                           SecurityLevel    aSecurityLevel,
-                          KeyIdMode        aKeyIdMode)
+                          KeyIdMode        aKeyIdMode,
+                          bool             aSuppressSequence)
 {
     uint16_t     fcf;
     FrameBuilder builder;
@@ -124,6 +118,9 @@ void Frame::InitMacHeader(Type             aType,
         {
             fcf |= kFcfPanidCompression;
         }
+
+        // Sequence Number Suppression bit was reserved, and must not be set on initialization.
+        OT_ASSERT(!aSuppressSequence);
         break;
 
     case kVersion2015:
@@ -194,9 +191,18 @@ void Frame::InitMacHeader(Type             aType,
         break;
     }
 
+    if (aSuppressSequence)
+    {
+        fcf |= kFcfSequenceSupression;
+    }
+
     builder.Init(mPsdu, GetMtu());
     IgnoreError(builder.AppendLittleEndianUint16(fcf));
-    IgnoreError(builder.AppendUint8(0)); // Seq number
+
+    if (!IsSequenceSuppressed(fcf))
+    {
+        IgnoreError(builder.AppendUint8(0)); // Seq number
+    }
 
     if (IsDstPanIdPresent(fcf))
     {
@@ -294,7 +300,7 @@ uint8_t Frame::FindDstPanIdIndex(void) const
 
     VerifyOrExit(IsDstPanIdPresent(), index = kInvalidIndex);
 
-    index = kFcfSize + kDsnSize;
+    index = kFcfSize + GetSeqNumSize();
 
 exit:
     return index;
@@ -373,7 +379,22 @@ void Frame::SetDstPanId(PanId aPanId)
     LittleEndian::WriteUint16(aPanId, &mPsdu[index]);
 }
 
-uint8_t Frame::FindDstAddrIndex(void) const { return kFcfSize + kDsnSize + (IsDstPanIdPresent() ? sizeof(PanId) : 0); }
+uint8_t Frame::GetSequence(void) const
+{
+    OT_ASSERT(IsSequencePresent());
+    return GetPsdu()[kSequenceIndex];
+}
+
+void Frame::SetSequence(uint8_t aSequence)
+{
+    OT_ASSERT(IsSequencePresent());
+    GetPsdu()[kSequenceIndex] = aSequence;
+}
+
+uint8_t Frame::FindDstAddrIndex(void) const
+{
+    return kFcfSize + GetSeqNumSize() + (IsDstPanIdPresent() ? sizeof(PanId) : 0);
+}
 
 Error Frame::GetDstAddr(Address &aAddress) const
 {
@@ -442,7 +463,7 @@ uint8_t Frame::FindSrcPanIdIndex(void) const
 
     VerifyOrExit(IsSrcPanIdPresent(), index = kInvalidIndex);
 
-    index += kFcfSize + kDsnSize;
+    index += kFcfSize + GetSeqNumSize();
 
     if (IsDstPanIdPresent(fcf))
     {
@@ -533,7 +554,7 @@ uint8_t Frame::FindSrcAddrIndex(void) const
     uint8_t  index = 0;
     uint16_t fcf   = GetFrameControlField();
 
-    index += kFcfSize + kDsnSize;
+    index += kFcfSize + GetSeqNumSize();
 
     if (IsDstPanIdPresent(fcf))
     {
@@ -941,7 +962,9 @@ uint8_t Frame::SkipAddrFieldIndex(void) const
 {
     uint8_t index;
 
-    VerifyOrExit(kFcfSize + kDsnSize + GetFcsSize() <= mLength, index = kInvalidIndex);
+    VerifyOrExit(kFcfSize + GetFcsSize() <= mLength, index = kInvalidIndex);
+
+    VerifyOrExit(!IsSequencePresent() || kFcfSize + kDsnSize + GetFcsSize() <= mLength, index = kInvalidIndex);
 
     index = CalculateAddrFieldSize(GetFrameControlField());
 
@@ -951,7 +974,7 @@ exit:
 
 uint8_t Frame::CalculateAddrFieldSize(uint16_t aFcf)
 {
-    uint8_t size = kFcfSize + kDsnSize;
+    uint8_t size = kFcfSize + GetSeqNumSize(aFcf);
 
     // This static method calculates the size (number of bytes) of
     // Address header field for a given Frame Control `aFcf` value.
@@ -1202,27 +1225,44 @@ exit:
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
 void Frame::SetCslIe(uint16_t aCslPeriod, uint16_t aCslPhase)
 {
-    uint8_t *cur = GetHeaderIe(CslIe::kHeaderIeId);
-    CslIe   *csl;
+    CslIe *csl = GetCslIe();
 
-    VerifyOrExit(cur != nullptr);
-
-    csl = reinterpret_cast<CslIe *>(cur + sizeof(HeaderIe));
+    VerifyOrExit(csl != nullptr);
     csl->SetPeriod(aCslPeriod);
     csl->SetPhase(aCslPhase);
+
 exit:
     return;
 }
+
+bool Frame::HasCslIe(void) const { return GetHeaderIe(CslIe::kHeaderIeId) != nullptr; }
 #endif // OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
+
+#if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE || (OPENTHREAD_FTD && OPENTHREAD_CONFIG_MAC_CSL_TRANSMITTER_ENABLE)
+const CslIe *Frame::GetCslIe(void) const
+{
+    const uint8_t *cur;
+    const CslIe   *csl = nullptr;
+
+    cur = GetHeaderIe(CslIe::kHeaderIeId);
+    VerifyOrExit(cur != nullptr);
+    csl = reinterpret_cast<const CslIe *>(cur + sizeof(HeaderIe));
+
+exit:
+    return csl;
+}
+#endif
 
 #if OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
 void Frame::SetEnhAckProbingIe(const uint8_t *aValue, uint8_t aLen)
 {
     uint8_t *cur = GetThreadIe(ThreadIe::kEnhAckProbingIe);
 
-    OT_ASSERT(cur != nullptr);
-
+    VerifyOrExit(cur != nullptr);
     memcpy(cur + sizeof(HeaderIe) + sizeof(VendorIeHeader), aValue, aLen);
+
+exit:
+    return;
 }
 #endif // OPENTHREAD_CONFIG_MLE_LINK_METRICS_SUBJECT_ENABLE
 
@@ -1536,7 +1576,14 @@ Frame::InfoString Frame::ToInfoString(void) const
     uint8_t    commandId, type;
     Address    src, dst;
 
-    string.Append("len:%d, seqnum:%d, type:", mLength, GetSequence());
+    if (IsSequencePresent())
+    {
+        string.Append("len:%d, seqnum:%d, type:", mLength, GetSequence());
+    }
+    else
+    {
+        string.Append("len:%d, type:", mLength);
+    }
 
     type = GetType();
 

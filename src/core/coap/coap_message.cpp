@@ -97,7 +97,7 @@ void Message::Finish(void)
 
     if (GetHelpData().mPayloadMarkerSet && (GetHelpData().mHeaderLength == GetLength()))
     {
-        IgnoreError(SetLength(GetLength() - 1));
+        RemoveFooter(sizeof(uint8_t));
     }
 
     WriteBytes(0, &GetHelpData().mHeader, GetOptionStart());
@@ -270,6 +270,24 @@ Error Message::ReadUriPathOptions(char (&aUriPath)[kMaxReceivedUriPath + 1]) con
     }
 
     *curUriPath = '\0';
+
+exit:
+    return error;
+}
+
+Error Message::AppendUriQueryOptions(const char *aUriQuery)
+{
+    Error       error = kErrorNone;
+    const char *cur   = aUriQuery;
+    const char *end;
+
+    while ((end = StringFind(cur, '&')) != nullptr)
+    {
+        SuccessOrExit(error = AppendOption(kOptionUriQuery, static_cast<uint16_t>(end - cur), cur));
+        cur = end + 1;
+    }
+
+    SuccessOrExit(error = AppendStringOption(kOptionUriQuery, cur));
 
 exit:
     return error;

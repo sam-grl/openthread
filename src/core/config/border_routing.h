@@ -72,6 +72,48 @@
 #endif
 
 /**
+ * @def OPENTHREAD_CONFIG_BORDER_ROUTING_TRACK_PEER_BR_INFO_ENABLE
+ *
+ * Define to 1 to allow the Routing Manager to track information (e.g., advertised prefixes) about peer Thread
+ * Border Routers that are connected to the same Thread network.
+ *
+ * When enabled, the Routing Manager will maintain a record of advertised RIO/PIO prefixes discovered from received
+ * Router Advertisements of peer BRs. These entries are disregarded in decision-making (e.g., selecting favored
+ * on-link prefix or determining which route to publish in the Thread Network Data).
+ *
+ * It is recommended to enable this feature alongside `OPENTHREAD_CONFIG_BORDER_ROUTING_USE_HEAP_ENABLE`.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_BORDER_ROUTING_TRACK_PEER_BR_INFO_ENABLE
+#define OPENTHREAD_CONFIG_BORDER_ROUTING_TRACK_PEER_BR_INFO_ENABLE OPENTHREAD_CONFIG_BORDER_ROUTING_USE_HEAP_ENABLE
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_BORDER_ROUTING_REACHABILITY_CHECK_ICMP6_ERROR_ENABLE
+ *
+ * Define to 1 to allow Routing Manager to check for reachability of messages being forwarded by the BR and determine
+ * whether to send an ICMPv6 Destination Unreachable error back to the sender.
+ *
+ * Specifically, if the Border Router (BR) decides to forward a unicast IPv6 message outside the AIL and the message's
+ * source address matches a BR-generated ULA OMR prefix (with low preference), and the destination is unreachable
+ * using this source address, then an ICMPv6 Destination Unreachable message is sent back to the sender.
+ *
+ * For example, this situation can occur when a local, non-infrastructure-derived ULA OMR prefix is published alongside
+ * a `::/0` route (due to discovered PIO/RIO prefixes by the BR). A Thread mesh device may try to reach addresses
+ * beyond the local AIL (e.g., the global internet) using its ULA OMR address as source, which would be unreachable.
+ *
+ * Alternatively, this functionality may be implemented within the platform layer, in which case this configuration
+ * should be disabled. Note that the platform layer is always responsible for implementing generation of "ICMPv6
+ * Destination Unreachable - No Route" messages. This reachability function will only generate "ICMPv6 Destination
+ * Unreachable - Communication Administratively Prohibited" messages for specific cases  where there may be a
+ * default route to the destination but the source address type prohibits usable communication with this destination.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_BORDER_ROUTING_REACHABILITY_CHECK_ICMP6_ERROR_ENABLE
+#define OPENTHREAD_CONFIG_BORDER_ROUTING_REACHABILITY_CHECK_ICMP6_ERROR_ENABLE 1
+#endif
+
+/**
  * @def OPENTHREAD_CONFIG_BORDER_ROUTING_MAX_DISCOVERED_ROUTERS
  *
  * Specifies maximum number of routers (on infra link) to track by routing manager.
@@ -158,6 +200,18 @@
  */
 #ifndef OPENTHREAD_CONFIG_BORDER_ROUTING_DHCP6_PD_ENABLE
 #define OPENTHREAD_CONFIG_BORDER_ROUTING_DHCP6_PD_ENABLE 0
+#endif
+
+/**
+ * @def OPENTHREAD_CONFIG_BORDER_ROUTING_TESTING_API_ENABLE
+ *
+ * Define to 1 to enable testing related APIs to be provided by the `RoutingManager`.
+ *
+ * This is intended for testing only. Production devices SHOULD set this to zero.
+ *
+ */
+#ifndef OPENTHREAD_CONFIG_BORDER_ROUTING_TESTING_API_ENABLE
+#define OPENTHREAD_CONFIG_BORDER_ROUTING_TESTING_API_ENABLE 0
 #endif
 
 /**

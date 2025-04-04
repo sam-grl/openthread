@@ -52,6 +52,8 @@ static constexpr uint32_t kUsPerTenSymbols = OT_US_PER_TEN_SYMBOLS; ///< Time fo
 static constexpr uint32_t kRadioHeaderShrDuration = 160;            ///< Duration of SHR in us
 static constexpr uint32_t kRadioHeaderPhrDuration = 32;             ///< Duration of PHR in us
 
+static constexpr int8_t kRadioPowerInvalid = OT_RADIO_POWER_INVALID; ///< Invalid TX power value
+
 #if OPENTHREAD_CONFIG_MAC_CSL_RECEIVER_ENABLE
 /**
  * Minimum CSL period supported in units of 10 symbols.
@@ -75,7 +77,7 @@ static constexpr uint64_t kMaxCslTimeout = OPENTHREAD_CONFIG_MAC_CSL_MAX_TIMEOUT
  * Implements the radio statistics logic.
  *
  * The radio statistics are the time when the radio in TX/RX/radio state.
- * Since this class collects these statistics from pure software level and no platform API is involved, a simplied
+ * Since this class collects these statistics from pure software level and no platform API is involved, a simplified
  * model is used to calculate the time of different radio states. The data may not be very accurate, but it's
  * sufficient to provide a general understanding of the proportion of time a device is in different radio states.
  *
@@ -226,6 +228,12 @@ public:
          *
          */
         void HandleEnergyScanDone(int8_t aMaxRssi);
+
+        /**
+         * This callback method handles "Bus Latency Changed" event from radio platform.
+         *
+         */
+        void HandleBusLatencyChanged(void);
 
 #if OPENTHREAD_CONFIG_DIAG_ENABLE
         /**

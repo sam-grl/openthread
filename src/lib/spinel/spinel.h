@@ -522,7 +522,7 @@ enum
 
     /// Generic failure to associate with other peers.
     /**
-     *  This status error should not be used by implementors if
+     *  This status error should not be used by implementers if
      *  enough information is available to determine that one of the
      *  later join failure status codes would be more accurate.
      *
@@ -607,6 +607,7 @@ typedef enum
     SPINEL_IPV6_ICMP_PING_OFFLOAD_UNICAST_ONLY   = 1,
     SPINEL_IPV6_ICMP_PING_OFFLOAD_MULTICAST_ONLY = 2,
     SPINEL_IPV6_ICMP_PING_OFFLOAD_ALL            = 3,
+    SPINEL_IPV6_ICMP_PING_OFFLOAD_RLOC_ALOC_ONLY = 4,
 } spinel_ipv6_icmp_ping_offload_mode_t;
 
 typedef enum
@@ -1295,6 +1296,7 @@ enum
     SPINEL_CAP_RCP_API_VERSION          = (SPINEL_CAP_RCP__BEGIN + 0),
     SPINEL_CAP_RCP_MIN_HOST_API_VERSION = (SPINEL_CAP_RCP__BEGIN + 1),
     SPINEL_CAP_RCP_RESET_TO_BOOTLOADER  = (SPINEL_CAP_RCP__BEGIN + 2),
+    SPINEL_CAP_RCP_LOG_CRASH_DUMP       = (SPINEL_CAP_RCP__BEGIN + 3),
     SPINEL_CAP_RCP__END                 = 80,
 
     SPINEL_CAP_OPENTHREAD__BEGIN       = 512,
@@ -2368,6 +2370,12 @@ enum
      */
     SPINEL_PROP_NET_PSKC = SPINEL_PROP_NET__BEGIN + 11,
 
+    /// Instruct NCP to leave the current network gracefully
+    /** Format Empty - Write only
+     *
+     */
+    SPINEL_PROP_NET_LEAVE_GRACEFULLY = SPINEL_PROP_NET__BEGIN + 12,
+
     SPINEL_PROP_NET__END = 0x50,
 
     SPINEL_PROP_NET_EXT__BEGIN = 0x1400,
@@ -3380,6 +3388,49 @@ enum
      */
     SPINEL_PROP_THREAD_BACKBONE_ROUTER_LOCAL_REGISTRATION_JITTER = SPINEL_PROP_THREAD_EXT__BEGIN + 59,
 
+    /// Thread Active Operational Dataset in raw TLVs format.
+    /** Format: `D` - Read-Write
+     *
+     * This property provides access to the current Thread Active Operational Dataset. A Thread device maintains the
+     * Operational Dataset that it has stored locally and the one currently in use by the partition to which it is
+     * attached. This property corresponds to the locally stored Dataset on the device.
+     *
+     * On write, any unknown/unsupported TLVs must be ignored.
+     *
+     */
+    SPINEL_PROP_THREAD_ACTIVE_DATASET_TLVS = SPINEL_PROP_THREAD_EXT__BEGIN + 60,
+
+    /// Thread Pending Operational Dataset in raw TLVs format.
+    /** Format: `D` - Read-Write
+     *
+     * This property provides access to the current locally stored Pending Operational Dataset.
+     *
+     * The formatting of this property follows the same rules as in SPINEL_PROP_THREAD_ACTIVE_DATASET_TLVS.
+     *
+     * On write, any unknown/unsupported TLVs must be ignored.
+     *
+     */
+    SPINEL_PROP_THREAD_PENDING_DATASET_TLVS = SPINEL_PROP_THREAD_EXT__BEGIN + 61,
+
+    /// Send MGMT_SET Thread Pending Operational Dataset (in TLV format).
+    /** Format: `D` - Write only
+     *
+     * This is write-only property. When written, it triggers a MGMT_PENDING_SET meshcop command to be sent to leader
+     * with the given Dataset.
+     *
+     * When setting this property, the spinel frame response will be:
+     * 1. A `LAST_STATUS` with the status of the transmission of MGMT_PENDING_SET command if it fails.
+     * 2. A `SPINEL_PROP_THREAD_MGMT_SET_PENDING_DATASET_TLVS` with no content.
+     *
+     * On response reception or timeout, another notification will be sent to the host:
+     * A `SPINEL_PROP_THREAD_MGMT_SET_PENDING_DATASET_TLVS` with a spinel_status_t indicating
+     * the result of MGMT_SET_PENDING.
+     *
+     * On write, any unknown/unsupported TLVs must be ignored.
+     *
+     */
+    SPINEL_PROP_THREAD_MGMT_SET_PENDING_DATASET_TLVS = SPINEL_PROP_THREAD_EXT__BEGIN + 62,
+
     SPINEL_PROP_THREAD_EXT__END = 0x1600,
 
     SPINEL_PROP_IPV6__BEGIN = 0x60,
@@ -3416,8 +3467,8 @@ enum
      *
      *  `6`: IPv6 Address
      *  `C`: Network Prefix Length (in bits)
-     *  `L`: Valid Lifetime
      *  `L`: Preferred Lifetime
+     *  `L`: Valid Lifetime
      *
      */
     SPINEL_PROP_IPV6_ADDRESS_TABLE = SPINEL_PROP_IPV6__BEGIN + 3,
@@ -3457,6 +3508,7 @@ enum
      *   SPINEL_IPV6_ICMP_PING_OFFLOAD_UNICAST_ONLY   = 1
      *   SPINEL_IPV6_ICMP_PING_OFFLOAD_MULTICAST_ONLY = 2
      *   SPINEL_IPV6_ICMP_PING_OFFLOAD_ALL            = 3
+     *   SPINEL_IPV6_ICMP_PING_OFFLOAD_RLOC_ALOC_ONLY = 4
      *
      * Default value is `NET_IPV6_ICMP_PING_OFFLOAD_DISABLED`.
      *
@@ -3526,10 +3578,9 @@ enum
      * The format of PHY-specific data for a Thread device contains the following
      * optional fields:
 
-     *   `C` : 802.15.4 channel (Receive channel)
+     *   `C` : 802.15.4 channel
      *   `C` : IEEE 802.15.4 LQI
-     *   `L` : The timestamp milliseconds
-     *   `S` : The timestamp microseconds, offset to mMsec
+     *   `X` : The timestamp in microseconds
      *
      * Frames written to this stream with `CMD_PROP_VALUE_SET` will be sent out
      * over the radio. This allows the caller to use the radio directly.
@@ -4396,6 +4447,16 @@ enum
      *
      */
     SPINEL_PROP_RCP_MIN_HOST_API_VERSION = SPINEL_PROP_RCP__BEGIN + 1,
+
+    /// Crash Dump
+    /** Format: Empty : Write only
+     *
+     * Required capability: SPINEL_CAP_RADIO and SPINEL_CAP_RCP_LOG_CRASH_DUMP.
+     *
+     * Writing to this property instructs the RCP to log a crash dump if available.
+     *
+     */
+    SPINEL_PROP_RCP_LOG_CRASH_DUMP = SPINEL_PROP_RCP__BEGIN + 2,
 
     SPINEL_PROP_RCP__END = 0xFF,
 

@@ -480,6 +480,18 @@ public:
     Error ReadUriPathOptions(char (&aUriPath)[kMaxReceivedUriPath + 1]) const;
 
     /**
+     * Appends a Uri-Query option.
+     *
+     * @param[in]  aUriQuery          A pointer to a null-terminated string.
+     *
+     * @retval kErrorNone         Successfully appended the option.
+     * @retval kErrorInvalidArgs  The option type is not equal or greater than the last option type.
+     * @retval kErrorNoBufs       The option length exceeds the buffer size.
+     *
+     */
+    Error AppendUriQueryOptions(const char *aUriQuery);
+
+    /**
      * Appends a Block option
      *
      * @param[in]  aType              Type of block option, 1 or 2.
@@ -765,7 +777,7 @@ public:
     bool IsReset(void) const { return (GetType() == kTypeReset); }
 
     /**
-     * Indicates whether or not the header is a confirmable Put request (i.e, `kTypeConfirmable` with
+     * Indicates whether or not the header is a confirmable Post request (i.e, `kTypeConfirmable` with
      *  `kCodePost`).
      *
      * @retval TRUE   Message is a confirmable Post request.
@@ -775,7 +787,7 @@ public:
     bool IsConfirmablePostRequest(void) const;
 
     /**
-     * Indicates whether or not the header is a non-confirmable Put request (i.e, `kTypeNonConfirmable` with
+     * Indicates whether or not the header is a non-confirmable Post request (i.e, `kTypeNonConfirmable` with
      *  `kCodePost`).
      *
      * @retval TRUE   Message is a non-confirmable Post request.

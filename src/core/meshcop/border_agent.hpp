@@ -46,6 +46,7 @@
 #include "common/non_copyable.hpp"
 #include "common/notifier.hpp"
 #include "common/tasklet.hpp"
+#include "meshcop/dataset.hpp"
 #include "meshcop/secure_transport.hpp"
 #include "net/udp6.hpp"
 #include "thread/tmf.hpp"
@@ -94,9 +95,10 @@ public:
      */
     enum State : uint8_t
     {
-        kStateStopped = OT_BORDER_AGENT_STATE_STOPPED, ///< Border agent is stopped/disabled.
-        kStateStarted = OT_BORDER_AGENT_STATE_STARTED, ///< Border agent is started.
-        kStateActive  = OT_BORDER_AGENT_STATE_ACTIVE,  ///< Border agent is connected with external commissioner.
+        kStateStopped,   ///< Stopped/disabled.
+        kStateStarted,   ///< Started and listening for connections.
+        kStateConnected, ///< Connected to an external commissioner candidate, petition pending.
+        kStateAccepted,  ///< Connected to and accepted an external commissioner.
     };
 
     /**
@@ -237,6 +239,14 @@ public:
 #endif // OPENTHREAD_CONFIG_BORDER_AGENT_EPHEMERAL_KEY_ENABLE
 
     /**
+     * Gets the set of border agent counters.
+     *
+     * @returns The border agent counters.
+     *
+     */
+    const otBorderAgentCounters *GetCounters(void) { return &mCounters; }
+
+    /**
      * Returns the UDP Proxy port to which the commissioner is currently
      * bound.
      *
@@ -283,11 +293,12 @@ private:
     void                SendErrorMessage(const ForwardContext &aForwardContext, Error aError);
     void                SendErrorMessage(const Coap::Message &aRequest, bool aSeparate, Error aError);
 
-    static void HandleConnected(bool aConnected, void *aContext);
-    void        HandleConnected(bool aConnected);
+    static void HandleConnected(SecureTransport::ConnectEvent aEvent, void *aContext);
+    void        HandleConnected(SecureTransport::ConnectEvent aEvent);
 
     template <Uri kUri> void HandleTmf(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
 
+    void HandleTmfDatasetGet(Coap::Message &aMessage, const Ip6::MessageInfo &aMessageInfo, Uri aUri);
     void HandleTimeout(void);
 
 #if OPENTHREAD_CONFIG_BORDER_AGENT_EPHEMERAL_KEY_ENABLE
@@ -307,12 +318,6 @@ private:
     Error ForwardToCommissioner(Coap::Message &aForwardMessage, const Message &aMessage);
     static bool HandleUdpReceive(void *aContext, const otMessage *aMessage, const otMessageInfo *aMessageInfo);
     bool        HandleUdpReceive(const Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-
-#if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_WARN)
-    void LogError(const char *aActionText, Error aError);
-#else
-    void LogError(const char *, Error) {}
-#endif
 
     using TimeoutTimer = TimerMilliIn<BorderAgent, &BorderAgent::HandleTimeout>;
 #if OPENTHREAD_CONFIG_BORDER_AGENT_EPHEMERAL_KEY_ENABLE
@@ -336,6 +341,7 @@ private:
     EphemeralKeyTask               mEphemeralKeyTask;
     Callback<EphemeralKeyCallback> mEphemeralKeyCallback;
 #endif
+    otBorderAgentCounters mCounters;
 };
 
 DeclareTmfHandler(BorderAgent, kUriRelayRx);
@@ -343,16 +349,12 @@ DeclareTmfHandler(BorderAgent, kUriCommissionerPetition);
 DeclareTmfHandler(BorderAgent, kUriCommissionerKeepAlive);
 DeclareTmfHandler(BorderAgent, kUriRelayTx);
 DeclareTmfHandler(BorderAgent, kUriCommissionerGet);
-DeclareTmfHandler(BorderAgent, kUriCommissionerSet);
 DeclareTmfHandler(BorderAgent, kUriActiveGet);
-DeclareTmfHandler(BorderAgent, kUriActiveSet);
 DeclareTmfHandler(BorderAgent, kUriPendingGet);
-DeclareTmfHandler(BorderAgent, kUriPendingSet);
 DeclareTmfHandler(BorderAgent, kUriProxyTx);
 
 } // namespace MeshCoP
 
-DefineMapEnum(otBorderAgentState, MeshCoP::BorderAgent::State);
 DefineCoreType(otBorderAgentId, MeshCoP::BorderAgent::Id);
 
 } // namespace ot

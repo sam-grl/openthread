@@ -336,6 +336,7 @@ openthread_core_files = [
   "api/link_metrics_api.cpp",
   "api/link_raw_api.cpp",
   "api/logging_api.cpp",
+  "api/mdns_api.cpp",
   "api/mesh_diag_api.cpp",
   "api/message_api.cpp",
   "api/multi_radio_api.cpp",
@@ -360,6 +361,7 @@ openthread_core_files = [
   "api/thread_ftd_api.cpp",
   "api/trel_api.cpp",
   "api/udp_api.cpp",
+  "api/verhoeff_checksum_api.cpp",
   "backbone_router/backbone_tmf.cpp",
   "backbone_router/backbone_tmf.hpp",
   "backbone_router/bbr_leader.cpp",
@@ -430,6 +432,8 @@ openthread_core_files = [
   "common/notifier.hpp",
   "common/num_utils.hpp",
   "common/numeric_limits.hpp",
+  "common/offset_range.cpp",
+  "common/offset_range.hpp",
   "common/owned_ptr.hpp",
   "common/owning_list.hpp",
   "common/pool.hpp",
@@ -495,6 +499,8 @@ openthread_core_files = [
   "mac/mac_filter.hpp",
   "mac/mac_frame.cpp",
   "mac/mac_frame.hpp",
+  "mac/mac_header_ie.cpp",
+  "mac/mac_header_ie.hpp",
   "mac/mac_links.cpp",
   "mac/mac_links.hpp",
   "mac/mac_types.cpp",
@@ -502,6 +508,7 @@ openthread_core_files = [
   "mac/sub_mac.cpp",
   "mac/sub_mac.hpp",
   "mac/sub_mac_callbacks.cpp",
+  "mac/sub_mac_csl_receiver.cpp",
   "meshcop/announce_begin_client.cpp",
   "meshcop/announce_begin_client.hpp",
   "meshcop/border_agent.cpp",
@@ -510,8 +517,6 @@ openthread_core_files = [
   "meshcop/commissioner.hpp",
   "meshcop/dataset.cpp",
   "meshcop/dataset.hpp",
-  "meshcop/dataset_local.cpp",
-  "meshcop/dataset_local.hpp",
   "meshcop/dataset_manager.cpp",
   "meshcop/dataset_manager.hpp",
   "meshcop/dataset_manager_ftd.cpp",
@@ -574,6 +579,8 @@ openthread_core_files = [
   "net/ip6_mpl.cpp",
   "net/ip6_mpl.hpp",
   "net/ip6_types.hpp",
+  "net/mdns.cpp",
+  "net/mdns.hpp",
   "net/nat64_translator.cpp",
   "net/nat64_translator.hpp",
   "net/nd6.cpp",
@@ -736,6 +743,8 @@ openthread_core_files = [
   "utils/slaac_address.hpp",
   "utils/srp_client_buffers.cpp",
   "utils/srp_client_buffers.hpp",
+  "utils/verhoeff_checksum.cpp",
+  "utils/verhoeff_checksum.hpp",
 ]
 
 openthread_radio_sources = [
@@ -765,6 +774,7 @@ openthread_radio_sources = [
   "instance/instance.cpp",
   "mac/link_raw.cpp",
   "mac/mac_frame.cpp",
+  "mac/mac_header_ie.cpp",
   "mac/mac_types.cpp",
   "mac/sub_mac.cpp",
   "mac/sub_mac_callbacks.cpp",
@@ -812,6 +822,7 @@ source_set("libopenthread_core_config") {
     "config/link_raw.h",
     "config/logging.h",
     "config/mac.h",
+    "config/mdns.h",
     "config/mesh_diag.h",
     "config/mesh_forwarder.h",
     "config/misc.h",
@@ -838,7 +849,10 @@ source_set("libopenthread_core_config") {
     ":core_config",
     "../..:openthread_config",
   ]
-  public_deps = [ "../../include/openthread:openthread_config" ]
+  public_deps = [
+    "../../include/openthread:openthread_config",
+    "../../include/openthread",
+  ]
   public_deps += openthread_core_config_deps
 }
 

@@ -65,6 +65,7 @@ const uint8_t KeyManager::kTrelInfoString[] = {'T', 'h', 'r', 'e', 'a', 'd', 'O'
 
 void SecurityPolicy::SetToDefault(void)
 {
+    Clear();
     mRotationTime = kDefaultKeyRotationTime;
     SetToDefaultFlags();
 }
@@ -368,11 +369,11 @@ void KeyManager::UpdateKeyMaterial(void)
 #endif
 }
 
-void KeyManager::SetCurrentKeySequence(uint32_t aKeySequence, KeySequenceUpdateMode aUpdateMode)
+void KeyManager::SetCurrentKeySequence(uint32_t aKeySequence, KeySeqUpdateFlags aFlags)
 {
     VerifyOrExit(aKeySequence != mKeySequence, Get<Notifier>().SignalIfFirst(kEventThreadKeySeqCounterChanged));
 
-    if (aUpdateMode == kApplyKeySwitchGuard)
+    if (aFlags & kApplySwitchGuard)
     {
         VerifyOrExit(mKeySwitchGuardTimer == 0);
     }
@@ -384,7 +385,11 @@ void KeyManager::SetCurrentKeySequence(uint32_t aKeySequence, KeySequenceUpdateM
     mMleFrameCounter = 0;
 
     ResetKeyRotationTimer();
-    mKeySwitchGuardTimer = mKeySwitchGuardTime;
+
+    if (aFlags & kResetGuardTimer)
+    {
+        mKeySwitchGuardTimer = mKeySwitchGuardTime;
+    }
 
     Get<Notifier>().Signal(kEventThreadKeySeqCounterChanged);
 
@@ -528,7 +533,7 @@ void KeyManager::CheckForKeyRotation(void)
 {
     if (mHoursSinceKeyRotation >= mSecurityPolicy.mRotationTime)
     {
-        SetCurrentKeySequence(mKeySequence + 1, kForceUpdate);
+        SetCurrentKeySequence(mKeySequence + 1, kForceUpdate | kResetGuardTimer);
     }
 }
 

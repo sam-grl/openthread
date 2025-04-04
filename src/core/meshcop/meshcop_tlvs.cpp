@@ -43,57 +43,6 @@
 namespace ot {
 namespace MeshCoP {
 
-bool Tlv::IsValid(const Tlv &aTlv)
-{
-    bool    isValid   = true;
-    uint8_t minLength = 0;
-
-    switch (aTlv.GetType())
-    {
-    case Tlv::kPanId:
-        minLength = sizeof(PanIdTlv::UintValueType);
-        break;
-    case Tlv::kExtendedPanId:
-        minLength = sizeof(ExtendedPanIdTlv::ValueType);
-        break;
-    case Tlv::kPskc:
-        minLength = sizeof(PskcTlv::ValueType);
-        break;
-    case Tlv::kNetworkKey:
-        minLength = sizeof(NetworkKeyTlv::ValueType);
-        break;
-    case Tlv::kMeshLocalPrefix:
-        minLength = sizeof(MeshLocalPrefixTlv::ValueType);
-        break;
-    case Tlv::kChannel:
-        VerifyOrExit(aTlv.GetLength() >= sizeof(ChannelTlvValue), isValid = false);
-        isValid = aTlv.ReadValueAs<ChannelTlv>().IsValid();
-        break;
-    case Tlv::kNetworkName:
-        isValid = As<NetworkNameTlv>(aTlv).IsValid();
-        break;
-
-    case Tlv::kSecurityPolicy:
-        isValid = As<SecurityPolicyTlv>(aTlv).IsValid();
-        break;
-
-    case Tlv::kChannelMask:
-        isValid = As<ChannelMaskTlv>(aTlv).IsValid();
-        break;
-
-    default:
-        break;
-    }
-
-    if (minLength > 0)
-    {
-        isValid = (aTlv.GetLength() >= minLength);
-    }
-
-exit:
-    return isValid;
-}
-
 NameData NetworkNameTlv::GetNetworkName(void) const
 {
     uint8_t len = GetLength();
@@ -158,6 +107,23 @@ const char *StateTlv::StateToString(State aState)
     return aState == kReject ? kStateStrings[2] : kStateStrings[aState];
 }
 
+uint32_t DelayTimerTlv::CalculateRemainingDelay(const Tlv &aDelayTimerTlv, TimeMilli aUpdateTime)
+{
+    uint32_t delay   = Min(aDelayTimerTlv.ReadValueAs<DelayTimerTlv>(), kMaxDelay);
+    uint32_t elapsed = TimerMilli::GetNow() - aUpdateTime;
+
+    if (delay > elapsed)
+    {
+        delay -= elapsed;
+    }
+    else
+    {
+        delay = 0;
+    }
+
+    return delay;
+}
+
 bool ChannelMaskTlv::IsValid(void) const
 {
     uint32_t channelMask;
@@ -170,8 +136,8 @@ Error ChannelMaskTlv::ReadChannelMask(uint32_t &aChannelMask) const
     EntriesData entriesData;
 
     entriesData.Clear();
-    entriesData.mData   = &mEntriesStart;
-    entriesData.mLength = GetLength();
+    entriesData.mData = &mEntriesStart;
+    entriesData.mOffsetRange.Init(0, GetLength());
 
     return entriesData.Parse(aChannelMask);
 }
@@ -180,12 +146,14 @@ Error ChannelMaskTlv::FindIn(const Message &aMessage, uint32_t &aChannelMask)
 {
     Error       error;
     EntriesData entriesData;
+    OffsetRange offsetRange;
 
     entriesData.Clear();
     entriesData.mMessage = &aMessage;
 
-    SuccessOrExit(error = FindTlvValueOffset(aMessage, Tlv::kChannelMask, entriesData.mOffset, entriesData.mLength));
-    error = entriesData.Parse(aChannelMask);
+    SuccessOrExit(error = FindTlvValueOffsetRange(aMessage, Tlv::kChannelMask, offsetRange));
+    entriesData.mOffsetRange = offsetRange;
+    error                    = entriesData.Parse(aChannelMask);
 
 exit:
     return error;
@@ -196,9 +164,8 @@ Error ChannelMaskTlv::EntriesData::Parse(uint32_t &aChannelMask)
     // Validates and parses the Channel Mask TLV entries for each
     // channel page and if successful updates `aChannelMask` to
     // return the combined mask for all channel pages supported by
-    // radio. The entries can be either contained in `mMessage` from
-    // `mOffset` (when `mMessage` is non-null) or be in a buffer
-    // `mData`. `mLength` gives the number of bytes for all entries.
+    // radio. The entries can be either contained in `mMessage`
+    // (when `mMessage` is non-null) or be in a buffer `mData`.
 
     Error        error = kErrorParse;
     Entry        readEntry;
@@ -207,11 +174,11 @@ Error ChannelMaskTlv::EntriesData::Parse(uint32_t &aChannelMask)
 
     aChannelMask = 0;
 
-    VerifyOrExit(mLength > 0); // At least one entry.
+    VerifyOrExit(!mOffsetRange.IsEmpty()); // At least one entry.
 
-    while (mLength > 0)
+    while (!mOffsetRange.IsEmpty())
     {
-        VerifyOrExit(mLength > kEntryHeaderSize);
+        VerifyOrExit(mOffsetRange.Contains(kEntryHeaderSize));
 
         if (mMessage != nullptr)
         {
@@ -219,17 +186,17 @@ Error ChannelMaskTlv::EntriesData::Parse(uint32_t &aChannelMask)
             // validating the entry and that the entry's channel page
             // is supported by radio, we read the full `Entry`.
 
-            mMessage->ReadBytes(mOffset, &readEntry, kEntryHeaderSize);
+            mMessage->ReadBytes(mOffsetRange.GetOffset(), &readEntry, kEntryHeaderSize);
             entry = &readEntry;
         }
         else
         {
-            entry = reinterpret_cast<const Entry *>(mData);
+            entry = reinterpret_cast<const Entry *>(&mData[mOffsetRange.GetOffset()]);
         }
 
         size = kEntryHeaderSize + entry->GetMaskLength();
 
-        VerifyOrExit(size <= mLength);
+        VerifyOrExit(mOffsetRange.Contains(size));
 
         if (Radio::SupportsChannelPage(entry->GetChannelPage()))
         {
@@ -240,22 +207,13 @@ Error ChannelMaskTlv::EntriesData::Parse(uint32_t &aChannelMask)
 
             if (mMessage != nullptr)
             {
-                IgnoreError(mMessage->Read(mOffset, readEntry));
+                IgnoreError(mMessage->Read(mOffsetRange, readEntry));
             }
 
             aChannelMask |= (entry->GetMask() & Radio::ChannelMaskForPage(entry->GetChannelPage()));
         }
 
-        mLength -= size;
-
-        if (mMessage != nullptr)
-        {
-            mOffset += size;
-        }
-        else
-        {
-            mData += size;
-        }
+        mOffsetRange.AdvanceOffset(size);
     }
 
     error = kErrorNone;

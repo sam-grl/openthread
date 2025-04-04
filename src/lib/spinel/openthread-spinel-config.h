@@ -34,7 +34,44 @@
 #ifndef OPENTHREAD_SPINEL_CONFIG_H_
 #define OPENTHREAD_SPINEL_CONFIG_H_
 
-#include "openthread-core-config.h"
+/**
+ * Include project specific lib config file if defined.
+ *
+ */
+#ifdef OPENTHREAD_PROJECT_LIB_CONFIG_FILE
+#include OPENTHREAD_PROJECT_LIB_CONFIG_FILE
+#endif
+
+/**
+ * @def OPENTHREAD_LIB_SPINEL_RX_FRAME_BUFFER_SIZE
+ *
+ * Specifies the rx frame buffer size used by `SpinelInterface` in RCP host (posix) code. This is applicable/used when
+ * `RadioSpinel` platform is used.
+ *
+ */
+#ifndef OPENTHREAD_LIB_SPINEL_RX_FRAME_BUFFER_SIZE
+#define OPENTHREAD_LIB_SPINEL_RX_FRAME_BUFFER_SIZE 8192
+#endif
+
+/**
+ * @def OPENTHREAD_LIB_SPINEL_LOG_MAX_SIZE
+ *
+ * The maximum log string size (number of chars).
+ *
+ */
+#ifndef OPENTHREAD_LIB_SPINEL_LOG_MAX_SIZE
+#define OPENTHREAD_LIB_SPINEL_LOG_MAX_SIZE 1024
+#endif
+
+/**
+ * @def OPENTHREAD_LIB_SPINEL_NCP_LOG_MAX_SIZE
+ *
+ * The maximum OpenThread log string size (number of chars) supported by NCP using Spinel `StreamWrite`.
+ *
+ */
+#ifndef OPENTHREAD_LIB_SPINEL_NCP_LOG_MAX_SIZE
+#define OPENTHREAD_LIB_SPINEL_NCP_LOG_MAX_SIZE 150
+#endif
 
 /**
  * @def OPENTHREAD_SPINEL_CONFIG_OPENTHREAD_MESSAGE_ENABLE

@@ -35,7 +35,7 @@
 
 #include <stdint.h>
 
-#include "common/encoding.hpp"
+#include "lib/utils/endian.hpp"
 
 namespace ot {
 namespace Spinel {
@@ -195,7 +195,10 @@ public:
      * @param[in] aAcceptLen    The accept length in bytes.
      *
      */
-    void SetHeaderAcceptLen(uint16_t aAcceptLen) { LittleEndian::WriteUint16(aAcceptLen, mBuffer + kIndexAcceptLen); }
+    void SetHeaderAcceptLen(uint16_t aAcceptLen)
+    {
+        Lib::Utils::LittleEndian::WriteUint16(aAcceptLen, mBuffer + kIndexAcceptLen);
+    }
 
     /**
      * Gets the "accept len" field in the SPI frame header.
@@ -203,7 +206,7 @@ public:
      * @returns  The accept length in bytes.
      *
      */
-    uint16_t GetHeaderAcceptLen(void) const { return LittleEndian::ReadUint16(mBuffer + kIndexAcceptLen); }
+    uint16_t GetHeaderAcceptLen(void) const { return Lib::Utils::LittleEndian::ReadUint16(mBuffer + kIndexAcceptLen); }
 
     /**
      * Sets the "data len" field in the SPI frame header.
@@ -213,7 +216,10 @@ public:
      * @param[in] aDataLen    The data length in bytes.
      *
      */
-    void SetHeaderDataLen(uint16_t aDataLen) { LittleEndian::WriteUint16(aDataLen, mBuffer + kIndexDataLen); }
+    void SetHeaderDataLen(uint16_t aDataLen)
+    {
+        Lib::Utils::LittleEndian::WriteUint16(aDataLen, mBuffer + kIndexDataLen);
+    }
 
     /**
      * Gets the "data len" field in the SPI frame header.
@@ -221,7 +227,7 @@ public:
      * @returns  The data length in bytes.
      *
      */
-    uint16_t GetHeaderDataLen(void) const { return LittleEndian::ReadUint16(mBuffer + kIndexDataLen); }
+    uint16_t GetHeaderDataLen(void) const { return Lib::Utils::LittleEndian::ReadUint16(mBuffer + kIndexDataLen); }
 
 private:
     enum

@@ -10,6 +10,7 @@ The diagnostics module supports common diagnostics features that are listed belo
 - [diag start](#diag-start)
 - [diag channel](#diag-channel)
 - [diag cw](#diag-cw-start)
+- [diag frame](#diag-frame)
 - [diag stream](#diag-stream-start)
 - [diag power](#diag-power)
 - [diag powersettings](#diag-powersettings)
@@ -74,6 +75,19 @@ Stop transmitting continuous carrier wave.
 
 ```bash
 > diag cw stop
+Done
+```
+
+### diag frame
+
+Usage: `diag frame [-s] <frame>`
+
+Set the frame (hex encoded) to be used by `diag send` and `diag repeat`. The frame may be overwritten by `diag send` and `diag repeat`.
+
+Specify `-s` to skip security processing in radio layer.
+
+```bash
+> diag frame 11223344
 Done
 ```
 
@@ -143,11 +157,11 @@ RawPowerSetting: 223344
 Done
 ```
 
-### diag send \<packets\> \<length\>
+### diag send \<packets\> [length]
 
-Transmit a fixed number of packets with fixed length.
+Transmit a fixed number of packets.
 
-Length parameter has to be in range [3, 127].
+Send the frame set by `diag frame` if length is omitted. Otherwise overwrite the frame set by `diag frame` and send a frame of the given length(MUST be in range [3, 127]).
 
 ```bash
 > diag send 20 100
@@ -155,11 +169,11 @@ sending 0x14 packet(s), length 0x64
 status 0x00
 ```
 
-### diag repeat \<delay\> \<length\>
+### diag repeat \<delay\> [length]
 
 Transmit packets repeatedly with a fixed interval.
 
-Length parameter has to be in range [3, 127].
+Send the frame set by `diag frame` if length is omitted. Otherwise overwrite the frame set by `diag frame` and send a frame of the given length (MUST be in range [3, 127]).
 
 ```bash
 > diag repeat 100 100

@@ -53,6 +53,7 @@
 #include <openthread/platform/time.h>
 
 #include "lib/platform/exit_code.h"
+#include "lib/spinel/coprocessor_type.h"
 #include "lib/url/url.hpp"
 
 /**
@@ -126,19 +127,6 @@ void platformAlarmProcess(otInstance *aInstance);
  */
 int32_t platformAlarmGetNext(void);
 
-#ifndef MS_PER_S
-#define MS_PER_S 1000
-#endif
-#ifndef US_PER_MS
-#define US_PER_MS 1000
-#endif
-#ifndef US_PER_S
-#define US_PER_S (MS_PER_S * US_PER_MS)
-#endif
-#ifndef NS_PER_US
-#define NS_PER_US 1000
-#endif
-
 /**
  * Advances the alarm time by @p aDelta.
  *
@@ -163,6 +151,15 @@ void platformRadioInit(const char *aUrl);
  *
  */
 void platformRadioDeinit(void);
+
+/**
+ * Handles the state change events for the radio driver.
+ *
+ * @param[in] aInstance  A pointer to the OpenThread instance.
+ * @param[in] aFlags     Flags that denote the state change events.
+ *
+ */
+void platformRadioHandleStateChange(otInstance *aInstance, otChangedFlags aFlags);
 
 /**
  * Inputs a received radio frame.
@@ -338,13 +335,22 @@ void virtualTimeReceiveEvent(struct VirtualTimeEvent *aEvent);
 void virtualTimeSendSleepEvent(const struct timeval *aTimeout);
 
 /**
- * Performs radio spinel processing of virtual time simulation.
+ * Performs radio processing of virtual time simulation.
  *
  * @param[in]   aInstance   A pointer to the OpenThread instance.
  * @param[in]   aEvent      A pointer to the current event.
  *
  */
-void virtualTimeRadioSpinelProcess(otInstance *aInstance, const struct VirtualTimeEvent *aEvent);
+void virtualTimeRadioProcess(otInstance *aInstance, const struct VirtualTimeEvent *aEvent);
+
+/**
+ * Performs radio  processing of virtual time simulation.
+ *
+ * @param[in]   aInstance   A pointer to the OpenThread instance.
+ * @param[in]   aEvent      A pointer to the current event.
+ *
+ */
+void virtualTimeSpinelProcess(otInstance *aInstance, const struct VirtualTimeEvent *aEvent);
 
 enum SocketBlockOption
 {
@@ -420,6 +426,62 @@ extern otInstance *gInstance;
  *
  */
 void platformBacktraceInit(void);
+
+/**
+ * Initializes the spinel service used by OpenThread.
+ *
+ * @param[in]   aUrl  A pointer to the null-terminated spinel URL.
+ *
+ * @retval  OT_COPROCESSOR_UNKNOWN  The initialization fails.
+ * @retval  OT_COPROCESSOR_RCP      The Co-processor is a RCP.
+ * @retval  OT_COPROCESSOR_NCP      The Co-processor is a NCP.
+ */
+CoprocessorType platformSpinelManagerInit(const char *aUrl);
+
+/**
+ * Shuts down the spinel service used by OpenThread.
+ *
+ */
+void platformSpinelManagerDeinit(void);
+
+/**
+ * Performs spinel driver processing.
+ *
+ * @param[in]   aInstance   A pointer to the OT instance.
+ * @param[in]   aContext    A pointer to the mainloop context.
+ *
+ */
+void platformSpinelManagerProcess(otInstance *aInstance, const otSysMainloopContext *aContext);
+
+/**
+ * Updates the file descriptor sets with file descriptors used by the spinel driver.
+ *
+ * @param[in]   aContext    A pointer to the mainloop context.
+ *
+ */
+void platformSpinelManagerUpdateFdSet(otSysMainloopContext *aContext);
+
+/**
+ * Initializes the resolver used by OpenThread.
+ *
+ */
+void platformResolverInit(void);
+
+/**
+ * Updates the file descriptor sets with file descriptors used by the resolver.
+ *
+ * @param[in]   aContext    A pointer to the mainloop context.
+ *
+ */
+void platformResolverUpdateFdSet(otSysMainloopContext *aContext);
+
+/**
+ * Performs the resolver processing.
+ *
+ * @param[in]  aContext  A pointer to the mainloop context.
+ *
+ */
+void platformResolverProcess(const otSysMainloopContext *aContext);
 
 #ifdef __cplusplus
 }

@@ -33,15 +33,29 @@
 
 #if OPENTHREAD_CONFIG_DNSSD_SERVER_ENABLE
 
+#if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+
+#if !OPENTHREAD_CONFIG_PLATFORM_DNSSD_ENABLE && !OPENTHREAD_CONFIG_MULTICAST_DNS_ENABLE
+#error "OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE requires either PLATFORM_DNSSD_ENABLE or MULTICAST_DNS_ENABLE"
+#endif
+#if !OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+#error "OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE requires OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE"
+#endif
+
+#endif // OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+
 #include <openthread/dnssd_server.h>
 
+#include "border_router/infra_if.hpp"
 #include "common/as_core_type.hpp"
 #include "common/callback.hpp"
+#include "common/equatable.hpp"
 #include "common/message.hpp"
 #include "common/non_copyable.hpp"
 #include "common/owned_ptr.hpp"
 #include "common/timer.hpp"
 #include "net/dns_types.hpp"
+#include "net/dnssd.hpp"
 #include "net/ip6.hpp"
 #include "net/netif.hpp"
 #include "net/srp_server.hpp"
@@ -71,6 +85,10 @@ namespace ServiceDiscovery {
 class Server : public InstanceLocator, private NonCopyable
 {
     friend class Srp::Server;
+#if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+    friend class ot::Dnssd;
+    friend class ot::BorderRouter::InfraIf;
+#endif
 
 public:
     /**
@@ -79,6 +97,26 @@ public:
      */
     class Counters : public otDnssdCounters, public Clearable<Counters>
     {
+    public:
+        /**
+         * Returns the total number of processed queries (successful or failed responses).
+         *
+         * @return The total number of queries.
+         *
+         */
+        uint32_t GetTotalQueries(void) const { return mSuccessResponse + GetTotalFailedQueries(); }
+
+        /**
+         * Returns the total number of failed queries (any error response code).
+         *
+         * @return The total number of failed queries.
+         *
+         */
+        uint32_t GetTotalFailedQueries(void) const
+        {
+            return mServerFailureResponse + mFormatErrorResponse + mNameErrorResponse + mNotImplementedResponse +
+                   mOtherResponse;
+        }
     };
 
 #if OPENTHREAD_CONFIG_DNS_UPSTREAM_QUERY_ENABLE
@@ -274,8 +312,9 @@ public:
      */
     enum TestModeFlags : uint8_t
     {
-        kTestModeSingleQuestionOnly     = 1 << 0, ///< Allow single question in query, send `FormatError` otherwise.
-        kTestModeEmptyAdditionalSection = 1 << 1, ///< Do not include any RR in additional section.
+        kTestModeRejectMultiQuestionQuery = 1 << 0, ///< Send `FormatError` for a query with multiple questions.
+        kTestModeIgnoreMultiQuestionQuery = 1 << 1, ///< Ignore a query with multiple questions (send no response).
+        kTestModeEmptyAdditionalSection   = 1 << 2, ///< Do not include any RR in additional section.
     };
 
     static constexpr uint8_t kTestModeDisabled = 0; ///< Test mode is disabled (no flags).
@@ -308,6 +347,7 @@ private:
         kTxtQuery,
         kSrvTxtQuery,
         kAaaaQuery,
+        kAQuery,
     };
 
     enum Section : uint8_t
@@ -316,9 +356,27 @@ private:
         kAdditionalDataSection,
     };
 
+    enum AddrType : uint8_t
+    {
+        kIp6AddrType,
+        kIp4AddrType,
+    };
+
+#if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+    enum ProxyAction : uint8_t
+    {
+        kNoAction,
+        kBrowsing,
+        kResolvingSrv,
+        kResolvingTxt,
+        kResolvingIp6Address,
+        kResolvingIp4Address
+    };
+#endif
+
     struct Request
     {
-        ResponseCode ParseQuestions(uint8_t aTestMode);
+        ResponseCode ParseQuestions(uint8_t aTestMode, bool &aShouldRespond);
 
         const Message          *mMessage;
         const Ip6::MessageInfo *mMessageInfo;
@@ -336,36 +394,54 @@ private:
         uint16_t mHostName;
     };
 
+#if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+    union ProxyResult
+    {
+        explicit ProxyResult(const Dnssd::BrowseResult &aBrowseResult) { mBrowseResult = &aBrowseResult; }
+        explicit ProxyResult(const Dnssd::SrvResult &aSrvResult) { mSrvResult = &aSrvResult; }
+        explicit ProxyResult(const Dnssd::TxtResult &aTxtResult) { mTxtResult = &aTxtResult; }
+        explicit ProxyResult(const Dnssd::AddressResult &aAddressResult) { mAddressResult = &aAddressResult; }
+
+        const Dnssd::BrowseResult  *mBrowseResult;
+        const Dnssd::SrvResult     *mSrvResult;
+        const Dnssd::TxtResult     *mTxtResult;
+        const Dnssd::AddressResult *mAddressResult;
+    };
+#endif
+
     class Response : public InstanceLocator, private NonCopyable
     {
     public:
         explicit Response(Instance &aInstance);
-        Error        AllocateAndInitFrom(const Request &aRequest);
-        void         InitFrom(ProxyQuery &aQuery, const ProxyQueryInfo &aInfo);
-        void         SetResponseCode(ResponseCode aResponseCode) { mHeader.SetResponseCode(aResponseCode); }
         ResponseCode AddQuestionsFrom(const Request &aRequest);
-        Error        ParseQueryName(void);
-        void         ReadQueryName(Name::Buffer &aName) const;
-        bool         QueryNameMatches(const char *aName) const;
-        Error        AppendQueryName(void);
-        Error        AppendPtrRecord(const char *aInstanceLabel, uint32_t aTtl);
-        Error        AppendSrvRecord(const ServiceInstanceInfo &aInstanceInfo);
-        Error        AppendSrvRecord(const char *aHostName,
-                                     uint32_t    aTtl,
-                                     uint16_t    aPriority,
-                                     uint16_t    aWeight,
-                                     uint16_t    aPort);
-        Error        AppendTxtRecord(const ServiceInstanceInfo &aInstanceInfo);
-        Error        AppendTxtRecord(const void *aTxtData, uint16_t aTxtLength, uint32_t aTtl);
-        Error        AppendHostAddresses(const HostInfo &aHostInfo);
-        Error        AppendHostAddresses(const ServiceInstanceInfo &aInstanceInfo);
-        Error        AppendHostAddresses(const Ip6::Address *aAddrs, uint16_t aAddrsLength, uint32_t aTtl);
-        void         UpdateRecordLength(ResourceRecord &aRecord, uint16_t aOffset);
-        void         IncResourceRecordCount(void);
-        void         Send(const Ip6::MessageInfo &aMessageInfo);
-        void         Answer(const HostInfo &aHostInfo, const Ip6::MessageInfo &aMessageInfo);
-        void         Answer(const ServiceInstanceInfo &aInstanceInfo, const Ip6::MessageInfo &aMessageInfo);
-        Error        ExtractServiceInstanceLabel(const char *aInstanceName, Name::LabelBuffer &aLabel);
+
+        Error AllocateAndInitFrom(const Request &aRequest);
+        void  InitFrom(ProxyQuery &aQuery, const ProxyQueryInfo &aInfo);
+        void  SetResponseCode(ResponseCode aResponseCode) { mHeader.SetResponseCode(aResponseCode); }
+        Error ParseQueryName(void);
+        void  ReadQueryName(Name::Buffer &aName) const;
+        bool  QueryNameMatches(const char *aName) const;
+        Error AppendQueryName(void);
+        Error AppendPtrRecord(const char *aInstanceLabel, uint32_t aTtl);
+        Error AppendSrvRecord(const ServiceInstanceInfo &aInstanceInfo);
+        Error AppendSrvRecord(const char *aHostName,
+                              uint32_t    aTtl,
+                              uint16_t    aPriority,
+                              uint16_t    aWeight,
+                              uint16_t    aPort);
+        Error AppendTxtRecord(const ServiceInstanceInfo &aInstanceInfo);
+        Error AppendTxtRecord(const void *aTxtData, uint16_t aTxtLength, uint32_t aTtl);
+        Error AppendHostAddresses(AddrType aAddrType, const HostInfo &aHostInfo);
+        Error AppendHostAddresses(const ServiceInstanceInfo &aInstanceInfo);
+        Error AppendHostAddresses(AddrType aAddrType, const Ip6::Address *aAddrs, uint16_t aAddrsLength, uint32_t aTtl);
+        Error AppendAaaaRecord(const Ip6::Address &aAddress, uint32_t aTtl);
+        Error AppendARecord(const Ip6::Address &aAddress, uint32_t aTtl);
+        void  UpdateRecordLength(ResourceRecord &aRecord, uint16_t aOffset);
+        void  IncResourceRecordCount(void);
+        void  Send(const Ip6::MessageInfo &aMessageInfo);
+        void  Answer(const HostInfo &aHostInfo, const Ip6::MessageInfo &aMessageInfo);
+        void  Answer(const ServiceInstanceInfo &aInstanceInfo, const Ip6::MessageInfo &aMessageInfo);
+        Error ExtractServiceInstanceLabel(const char *aInstanceName, Name::LabelBuffer &aLabel);
 #if OPENTHREAD_CONFIG_SRP_SERVER_ENABLE
         Error ResolveBySrp(void);
         bool  QueryNameMatchesService(const Srp::Server::Service &aService) const;
@@ -373,6 +449,14 @@ private:
         Error AppendTxtRecord(const Srp::Server::Service &aService);
         Error AppendHostAddresses(const Srp::Server::Host &aHost);
 #endif
+#if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+        Error AppendPtrRecord(const ProxyResult &aResult);
+        Error AppendSrvRecord(const ProxyResult &aResult);
+        Error AppendTxtRecord(const ProxyResult &aResult);
+        Error AppendHostIp6Addresses(const ProxyResult &aResult);
+        Error AppendHostIp4Addresses(const ProxyResult &aResult);
+#endif
+
 #if OT_SHOULD_LOG_AT(OT_LOG_LEVEL_INFO)
         void               Log(void) const;
         static const char *QueryTypeToString(QueryType aType);
@@ -395,19 +479,107 @@ private:
         Ip6::MessageInfo mMessageInfo;
         TimeMilli        mExpireTime;
         NameOffsets      mOffsets;
+#if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+        ProxyAction mAction;
+#endif
     };
 
-    bool           IsRunning(void) const { return mSocket.IsBound(); }
-    static void    HandleUdpReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo);
-    void           HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
-    void           ProcessQuery(Request &aRequest);
-    static uint8_t GetNameLength(const char *aName);
+#if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+    class DiscoveryProxy : public InstanceLocator, private NonCopyable
+    {
+        friend ot::Dnssd;
 
-    void        ResolveByProxy(Response &aResponse, const Ip6::MessageInfo &aMessageInfo);
-    void        RemoveQueryAndPrepareResponse(ProxyQuery &aQuery, const ProxyQueryInfo &aInfo, Response &aResponse);
-    void        Finalize(ProxyQuery &aQuery, ResponseCode aResponseCode);
-    static void ReadQueryName(const Message &aQuery, Name::Buffer &aName);
-    static bool QueryNameMatches(const Message &aQuery, const char *aName);
+    public:
+        explicit DiscoveryProxy(Instance &aInstance);
+
+        bool IsRunning(void) const { return mIsRunning; }
+        void UpdateState(void);
+        void Start(void);
+        void Stop(void);
+        void Resolve(ProxyQuery &aQuery, ProxyQueryInfo &aInfo);
+        void CancelAction(ProxyQuery &aQuery, ProxyQueryInfo &aInfo);
+
+    private:
+        enum Command : uint8_t
+        {
+            kStart,
+            kStop,
+        };
+
+        typedef Error (Response::*ResponseAppender)(const ProxyResult &aResult);
+
+        void Perform(ProxyAction aAction, ProxyQuery &aQuery, ProxyQueryInfo &aInfo);
+        void ReadNameFor(ProxyAction aAction, ProxyQuery &aQuery, ProxyQueryInfo &aInfo, Name::Buffer &aName) const;
+        bool HasActive(ProxyAction aAction, const Name::Buffer &aName) const;
+        bool QueryMatches(const ProxyQuery     &aQuery,
+                          const ProxyQueryInfo &aInfo,
+                          ProxyAction           aAction,
+                          const Name::Buffer   &aName) const;
+        void UpdateProxy(Command               aCommand,
+                         ProxyAction           aAction,
+                         const ProxyQuery     &aQuery,
+                         const ProxyQueryInfo &aInfo,
+                         Name::Buffer         &aName);
+        void StartOrStopBrowser(Command aCommand, Name::Buffer &aServiceName);
+        void StartOrStopSrvResolver(Command aCommand, const ProxyQuery &aQuery, const ProxyQueryInfo &aInfo);
+        void StartOrStopTxtResolver(Command aCommand, const ProxyQuery &aQuery, const ProxyQueryInfo &aInfo);
+        void StartOrStopIp6Resolver(Command aCommand, Name::Buffer &aHostName);
+        void StartOrStopIp4Resolver(Command aCommand, Name::Buffer &aHostName);
+
+        static void HandleBrowseResult(otInstance *aInstance, const otPlatDnssdBrowseResult *aResult);
+        static void HandleSrvResult(otInstance *aInstance, const otPlatDnssdSrvResult *aResult);
+        static void HandleTxtResult(otInstance *aInstance, const otPlatDnssdTxtResult *aResult);
+        static void HandleIp6AddressResult(otInstance *aInstance, const otPlatDnssdAddressResult *aResult);
+        static void HandleIp4AddressResult(otInstance *aInstance, const otPlatDnssdAddressResult *aResult);
+
+        void HandleBrowseResult(const Dnssd::BrowseResult &aResult);
+        void HandleSrvResult(const Dnssd::SrvResult &aResult);
+        void HandleTxtResult(const Dnssd::TxtResult &aResult);
+        void HandleIp6AddressResult(const Dnssd::AddressResult &aResult);
+        void HandleIp4AddressResult(const Dnssd::AddressResult &aResult);
+        void HandleResult(ProxyAction         aAction,
+                          const Name::Buffer &aName,
+                          ResponseAppender    aAppender,
+                          const ProxyResult  &aResult);
+
+        static bool IsActionForAdditionalSection(ProxyAction aAction, QueryType aQueryType);
+
+        bool mIsRunning;
+    };
+#endif
+
+    bool IsRunning(void) const { return mSocket.IsBound(); }
+    void HandleUdpReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo);
+    void ProcessQuery(Request &aRequest);
+    void ResolveByProxy(Response &aResponse, const Ip6::MessageInfo &aMessageInfo);
+    void RemoveQueryAndPrepareResponse(ProxyQuery &aQuery, ProxyQueryInfo &aInfo, Response &aResponse);
+    void Finalize(ProxyQuery &aQuery, ResponseCode aResponseCode);
+
+    static void  ReadQueryName(const Message &aQuery, Name::Buffer &aName);
+    static bool  QueryNameMatches(const Message &aQuery, const char *aName);
+    static void  ReadQueryInstanceName(const ProxyQuery &aQuery, const ProxyQueryInfo &aInfo, Name::Buffer &aName);
+    static void  ReadQueryInstanceName(const ProxyQuery     &aQuery,
+                                       const ProxyQueryInfo &aInfo,
+                                       Name::LabelBuffer    &aInstanceLabel,
+                                       Name::Buffer         &aServiceType);
+    static bool  QueryInstanceNameMatches(const ProxyQuery &aQuery, const ProxyQueryInfo &aInfo, const char *aName);
+    static void  ReadQueryHostName(const ProxyQuery &aQuery, const ProxyQueryInfo &aInfo, Name::Buffer &aName);
+    static bool  QueryHostNameMatches(const ProxyQuery &aQuery, const ProxyQueryInfo &aInfo, const char *aName);
+    static Error StripDomainName(const char *aFullName, Name::Buffer &aLabels);
+    static Error StripDomainName(Name::Buffer &aName);
+    static void  ConstructFullName(const char *aLabels, Name::Buffer &aFullName);
+    static void  ConstructFullInstanceName(const char   *aInstanceLabel,
+                                           const char   *aServiceType,
+                                           Name::Buffer &aFullName);
+    static void  ConstructFullServiceSubTypeName(const char   *aServiceType,
+                                                 const char   *aSubTypeLabel,
+                                                 Name::Buffer &aFullName);
+
+#if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+    void        HandleInfraIfStateChanged(void) { mDiscoveryProxy.UpdateState(); }
+    void        HandleDnssdPlatformStateChange(void) { mDiscoveryProxy.UpdateState(); }
+    static bool IsProxyAddressValid(const Ip6::Address &aAddress);
+#endif
 
 #if OPENTHREAD_CONFIG_DNS_UPSTREAM_QUERY_ENABLE
     static bool               ShouldForwardToUpstream(const Request &aRequest);
@@ -421,7 +593,8 @@ private:
 
     void UpdateResponseCounters(ResponseCode aResponseCode);
 
-    using ServerTimer = TimerMilliIn<Server, &Server::HandleTimer>;
+    using ServerTimer  = TimerMilliIn<Server, &Server::HandleTimer>;
+    using ServerSocket = Ip6::Udp::SocketIn<Server, &Server::HandleUdpReceive>;
 
     static const char kDefaultDomainName[];
     static const char kSubLabel[];
@@ -429,11 +602,15 @@ private:
     static const char *kBlockedDomains[];
 #endif
 
-    Ip6::Udp::Socket mSocket;
+    ServerSocket mSocket;
 
     ProxyQueryList                mProxyQueries;
     Callback<SubscribeCallback>   mQuerySubscribe;
     Callback<UnsubscribeCallback> mQueryUnsubscribe;
+
+#if OPENTHREAD_CONFIG_DNSSD_DISCOVERY_PROXY_ENABLE
+    DiscoveryProxy mDiscoveryProxy;
+#endif
 
 #if OPENTHREAD_CONFIG_DNS_UPSTREAM_QUERY_ENABLE
     bool                     mEnableUpstreamQuery;

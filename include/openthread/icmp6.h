@@ -76,8 +76,9 @@ typedef enum otIcmp6Type
  */
 typedef enum otIcmp6Code
 {
-    OT_ICMP6_CODE_DST_UNREACH_NO_ROUTE = 0, ///< Destination Unreachable No Route
-    OT_ICMP6_CODE_FRAGM_REAS_TIME_EX   = 1, ///< Fragment Reassembly Time Exceeded
+    OT_ICMP6_CODE_DST_UNREACH_NO_ROUTE   = 0, ///< Destination Unreachable (Type 1) - No Route
+    OT_ICMP6_CODE_DST_UNREACH_PROHIBITED = 1, ///< Destination Unreachable (Type 1) - Administratively Prohibited
+    OT_ICMP6_CODE_FRAGM_REAS_TIME_EX     = 1, ///< Time Exceeded (Type 3) - Fragment Reassembly
 } otIcmp6Code;
 
 #define OT_ICMP6_HEADER_DATA_SIZE 4        ///< Size of ICMPv6 Header.
@@ -144,6 +145,7 @@ typedef enum otIcmp6EchoMode
     OT_ICMP6_ECHO_HANDLER_UNICAST_ONLY   = 1, ///< ICMPv6 Echo processing enabled only for unicast requests only
     OT_ICMP6_ECHO_HANDLER_MULTICAST_ONLY = 2, ///< ICMPv6 Echo processing enabled only for multicast requests only
     OT_ICMP6_ECHO_HANDLER_ALL            = 3, ///< ICMPv6 Echo processing enabled for unicast and multicast requests
+    OT_ICMP6_ECHO_HANDLER_RLOC_ALOC_ONLY = 4, ///< ICMPv6 Echo processing enabled for RLOC/ALOC destinations only
 } otIcmp6EchoMode;
 
 /**

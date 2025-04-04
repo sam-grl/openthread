@@ -25,11 +25,13 @@
   ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
   POSSIBILITY OF SUCH DAMAGE.
 """
-
 import readline
 import shlex
+from argparse import ArgumentParser
 from ble.ble_stream_secure import BleStreamSecure
-from cli.base_commands import (HelpCommand, HelloCommand, CommissionCommand, ThreadStateCommand, ScanCommand)
+from cli.base_commands import (HelpCommand, HelloCommand, CommissionCommand, DecommissionCommand, GetDeviceIdCommand,
+                               GetExtPanIDCommand, GetNetworkNameCommand, GetProvisioningUrlCommand, PingCommand,
+                               ThreadStateCommand, ScanCommand)
 from cli.dataset_commands import (DatasetCommand)
 from dataset.dataset import ThreadDataset
 from typing import Optional
@@ -37,16 +39,30 @@ from typing import Optional
 
 class CLI:
 
-    def __init__(self, dataset: ThreadDataset, ble_sstream: Optional[BleStreamSecure] = None):
+    def __init__(self,
+                 dataset: ThreadDataset,
+                 cmd_args: Optional[ArgumentParser] = None,
+                 ble_sstream: Optional[BleStreamSecure] = None):
         self._commands = {
             'help': HelpCommand(),
             'hello': HelloCommand(),
             'commission': CommissionCommand(),
+            'decommission': DecommissionCommand(),
+            'device_id': GetDeviceIdCommand(),
+            'ext_panid': GetExtPanIDCommand(),
+            'provisioning_url': GetProvisioningUrlCommand(),
+            'network_name': GetNetworkNameCommand(),
+            'ping': PingCommand(),
             'dataset': DatasetCommand(),
             'thread': ThreadStateCommand(),
             'scan': ScanCommand(),
         }
-        self._context = {'ble_sstream': ble_sstream, 'dataset': dataset, 'commands': self._commands}
+        self._context = {
+            'ble_sstream': ble_sstream,
+            'dataset': dataset,
+            'commands': self._commands,
+            'cmd_args': cmd_args
+        }
         readline.set_completer(self.completer)
         readline.parse_and_bind('tab: complete')
 

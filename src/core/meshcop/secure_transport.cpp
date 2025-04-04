@@ -87,7 +87,7 @@ SecureTransport::SecureTransport(Instance &aInstance, bool aLayerTwoSecurity, bo
     , mMaxConnectionAttempts(0)
     , mRemainingConnectionAttempts(0)
     , mReceiveMessage(nullptr)
-    , mSocket(aInstance)
+    , mSocket(aInstance, *this)
     , mMessageSubType(Message::kSubTypeNone)
     , mMessageDefaultSubType(Message::kSubTypeNone)
 {
@@ -158,7 +158,7 @@ Error SecureTransport::Open(ReceiveHandler aReceiveHandler, ConnectedHandler aCo
 
     VerifyOrExit(IsStateClosed(), error = kErrorAlready);
 
-    SuccessOrExit(error = mSocket.Open(&SecureTransport::HandleReceive, this));
+    SuccessOrExit(error = mSocket.Open());
 
     mConnectedCallback.Set(aConnectedHandler, aContext);
     mReceiveCallback.Set(aReceiveHandler, aContext);
@@ -204,11 +204,6 @@ exit:
     return error;
 }
 
-void SecureTransport::HandleReceive(void *aContext, otMessage *aMessage, const otMessageInfo *aMessageInfo)
-{
-    static_cast<SecureTransport *>(aContext)->HandleReceive(AsCoreType(aMessage), AsCoreType(aMessageInfo));
-}
-
 void SecureTransport::HandleReceive(Message &aMessage, const Ip6::MessageInfo &aMessageInfo)
 {
     VerifyOrExit(!IsStateClosed());
@@ -220,24 +215,18 @@ void SecureTransport::HandleReceive(Message &aMessage, const Ip6::MessageInfo &a
             mRemainingConnectionAttempts--;
         }
 
-        IgnoreError(mSocket.Connect(Ip6::SockAddr(aMessageInfo.GetPeerAddr(), aMessageInfo.GetPeerPort())));
-
         mMessageInfo.SetPeerAddr(aMessageInfo.GetPeerAddr());
         mMessageInfo.SetPeerPort(aMessageInfo.GetPeerPort());
         mMessageInfo.SetIsHostInterface(aMessageInfo.IsHostInterface());
 
-        if (Get<ThreadNetif>().HasUnicastAddress(aMessageInfo.GetSockAddr()))
-        {
-            mMessageInfo.SetSockAddr(aMessageInfo.GetSockAddr());
-        }
-
+        mMessageInfo.SetSockAddr(aMessageInfo.GetSockAddr());
         mMessageInfo.SetSockPort(aMessageInfo.GetSockPort());
 
         SuccessOrExit(Setup(false));
     }
     else
     {
-        // Once DTLS session is started, communicate only with a peer.
+        // Once DTLS session is started, communicate only with a single peer.
         VerifyOrExit((mMessageInfo.GetPeerAddr() == aMessageInfo.GetPeerAddr()) &&
                      (mMessageInfo.GetPeerPort() == aMessageInfo.GetPeerPort()));
     }
@@ -495,7 +484,7 @@ exit:
 
 void SecureTransport::Close(void)
 {
-    Disconnect();
+    Disconnect(kDisconnectedLocalClosed);
 
     SetState(kStateClosed);
     mTimerSet = false;
@@ -505,16 +494,18 @@ void SecureTransport::Close(void)
     mTimer.Stop();
 }
 
-void SecureTransport::Disconnect(void)
+void SecureTransport::Disconnect(void) { Disconnect(kDisconnectedLocalClosed); }
+
+void SecureTransport::Disconnect(ConnectEvent aEvent)
 {
     VerifyOrExit(IsStateConnectingOrConnected());
 
     mbedtls_ssl_close_notify(&mSsl);
     SetState(kStateCloseNotify);
+    mConnectEvent = aEvent;
     mTimer.Start(kGuardTimeNewConnectionMilli);
 
     mMessageInfo.Clear();
-    IgnoreError(mSocket.Connect());
 
     FreeMbedtls();
 
@@ -645,15 +636,13 @@ Error SecureTransport::GetPeerSubjectAttributeByOid(const char *aOid,
 
     VerifyOrExit(aAttributeBuffer != nullptr, error = kErrorNoBufs);
     VerifyOrExit(peerCert != nullptr, error = kErrorInvalidState);
+
     data = mbedtls_asn1_find_named_data(&peerCert->subject, aOid, aOidLength);
     VerifyOrExit(data != nullptr, error = kErrorNotFound);
+
     length = data->val.len;
     VerifyOrExit(length <= attributeBufferSize, error = kErrorNoBufs);
-
-    if (aAttributeLength != nullptr)
-    {
-        *aAttributeLength = length;
-    }
+    *aAttributeLength = length;
 
     if (aAsn1Type != nullptr)
     {
@@ -734,28 +723,28 @@ Error SecureTransport::GetThreadAttributeFromCertificate(const mbedtls_x509_crt 
         ret = mbedtls_asn1_get_bool(&p, endExtData, &isCritical);
         VerifyOrExit(ret == 0 || ret == MBEDTLS_ERR_ASN1_UNEXPECTED_TAG, error = kErrorParse);
 
-        // Data should be octet string type
+        // Data must be octet string type, see https://datatracker.ietf.org/doc/html/rfc5280#section-4.1
         VerifyOrExit(mbedtls_asn1_get_tag(&p, endExtData, &len, MBEDTLS_ASN1_OCTET_STRING) == 0, error = kErrorParse);
         VerifyOrExit(endExtData == p + len, error = kErrorParse);
 
-        if (isCritical || extnOid.len != sizeof(oid))
+        // TODO: extensions with isCritical == 1 that are unknown should lead to rejection of the entire cert.
+        if (extnOid.len == sizeof(oid) && memcmp(extnOid.p, oid, sizeof(oid)) == 0)
         {
-            continue;
-        }
-
-        if (memcmp(extnOid.p, oid, sizeof(oid)) == 0)
-        {
-            *aAttributeLength = len;
+            // per RFC 5280, octet string must contain ASN.1 Type Length Value octets
+            VerifyOrExit(len >= 2, error = kErrorParse);
+            VerifyOrExit(*(p + 1) == len - 2, error = kErrorParse); // check TLV Length, not Type.
+            *aAttributeLength = len - 2; // strip the ASN.1 Type Length bytes from embedded TLV
 
             if (aAttributeBuffer != nullptr)
             {
-                VerifyOrExit(len <= attributeBufferSize, error = kErrorNoBufs);
-                memcpy(aAttributeBuffer, p, len);
+                VerifyOrExit(*aAttributeLength <= attributeBufferSize, error = kErrorNoBufs);
+                memcpy(aAttributeBuffer, p + 2, *aAttributeLength);
             }
 
             error = kErrorNone;
             break;
         }
+        p += len;
     }
 
 exit:
@@ -1057,23 +1046,24 @@ void SecureTransport::HandleTimer(void)
         if ((mMaxConnectionAttempts > 0) && (mRemainingConnectionAttempts == 0))
         {
             Close();
-            mConnectedCallback.InvokeIfSet(false);
+            mConnectEvent = kDisconnectedMaxAttempts;
             mAutoCloseCallback.InvokeIfSet();
         }
         else
         {
             SetState(kStateOpen);
             mTimer.Stop();
-            mConnectedCallback.InvokeIfSet(false);
         }
+        mConnectedCallback.InvokeIfSet(mConnectEvent);
     }
 }
 
 void SecureTransport::Process(void)
 {
-    uint8_t buf[OPENTHREAD_CONFIG_DTLS_MAX_CONTENT_LEN];
-    bool    shouldDisconnect = false;
-    int     rval;
+    uint8_t      buf[OPENTHREAD_CONFIG_DTLS_MAX_CONTENT_LEN];
+    bool         shouldDisconnect = false;
+    int          rval;
+    ConnectEvent event;
 
     while (IsStateConnectingOrConnected())
     {
@@ -1084,7 +1074,8 @@ void SecureTransport::Process(void)
             if (mSsl.MBEDTLS_PRIVATE(state) == MBEDTLS_SSL_HANDSHAKE_OVER)
             {
                 SetState(kStateConnected);
-                mConnectedCallback.InvokeIfSet(true);
+                mConnectEvent = kConnected;
+                mConnectedCallback.InvokeIfSet(mConnectEvent);
             }
         }
         else
@@ -1106,6 +1097,7 @@ void SecureTransport::Process(void)
             {
             case MBEDTLS_ERR_SSL_PEER_CLOSE_NOTIFY:
                 mbedtls_ssl_close_notify(&mSsl);
+                event = kDisconnectedPeerClosed;
                 ExitNow(shouldDisconnect = true);
                 OT_UNREACHABLE_CODE(break);
 
@@ -1114,6 +1106,7 @@ void SecureTransport::Process(void)
 
             case MBEDTLS_ERR_SSL_FATAL_ALERT_MESSAGE:
                 mbedtls_ssl_close_notify(&mSsl);
+                event = kDisconnectedError;
                 ExitNow(shouldDisconnect = true);
                 OT_UNREACHABLE_CODE(break);
 
@@ -1122,6 +1115,7 @@ void SecureTransport::Process(void)
                 {
                     mbedtls_ssl_send_alert_message(&mSsl, MBEDTLS_SSL_ALERT_LEVEL_FATAL,
                                                    MBEDTLS_SSL_ALERT_MSG_BAD_RECORD_MAC);
+                    event = kDisconnectedError;
                     ExitNow(shouldDisconnect = true);
                 }
 
@@ -1132,6 +1126,7 @@ void SecureTransport::Process(void)
                 {
                     mbedtls_ssl_send_alert_message(&mSsl, MBEDTLS_SSL_ALERT_LEVEL_FATAL,
                                                    MBEDTLS_SSL_ALERT_MSG_HANDSHAKE_FAILURE);
+                    event = kDisconnectedError;
                     ExitNow(shouldDisconnect = true);
                 }
 
@@ -1151,7 +1146,7 @@ exit:
 
     if (shouldDisconnect)
     {
-        Disconnect();
+        Disconnect(event);
     }
 }
 

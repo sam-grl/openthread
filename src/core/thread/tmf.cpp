@@ -42,18 +42,18 @@ namespace Tmf {
 //----------------------------------------------------------------------------------------------------------------------
 // MessageInfo
 
-void MessageInfo::SetSockAddrToRloc(void) { SetSockAddr(Get<Mle::MleRouter>().GetMeshLocal16()); }
+void MessageInfo::SetSockAddrToRloc(void) { SetSockAddr(Get<Mle::MleRouter>().GetMeshLocalRloc()); }
 
-Error MessageInfo::SetSockAddrToRlocPeerAddrToLeaderAloc(void)
+void MessageInfo::SetSockAddrToRlocPeerAddrToLeaderAloc(void)
 {
     SetSockAddrToRloc();
-    return Get<Mle::MleRouter>().GetLeaderAloc(GetPeerAddr());
+    Get<Mle::MleRouter>().GetLeaderAloc(GetPeerAddr());
 }
 
-Error MessageInfo::SetSockAddrToRlocPeerAddrToLeaderRloc(void)
+void MessageInfo::SetSockAddrToRlocPeerAddrToLeaderRloc(void)
 {
     SetSockAddrToRloc();
-    return Get<Mle::MleRouter>().GetLeaderAddress(GetPeerAddr());
+    Get<Mle::MleRouter>().GetLeaderRloc(GetPeerAddr());
 }
 
 void MessageInfo::SetSockAddrToRlocPeerAddrToRealmLocalAllRoutersMulticast(void)
@@ -65,8 +65,7 @@ void MessageInfo::SetSockAddrToRlocPeerAddrToRealmLocalAllRoutersMulticast(void)
 void MessageInfo::SetSockAddrToRlocPeerAddrTo(uint16_t aRloc16)
 {
     SetSockAddrToRloc();
-    SetPeerAddr(Get<Mle::MleRouter>().GetMeshLocal16());
-    GetPeerAddr().GetIid().SetLocator(aRloc16);
+    GetPeerAddr().SetToRoutingLocator(Get<Mle::Mle>().GetMeshLocalPrefix(), aRloc16);
 }
 
 void MessageInfo::SetSockAddrToRlocPeerAddrTo(const Ip6::Address &aPeerAddress)
@@ -132,6 +131,7 @@ bool Agent::HandleResource(const char *aUriPath, Message &aMessage, const Ip6::M
         Case(kUriAddressSolicit, Mle::MleRouter);
         Case(kUriAddressRelease, Mle::MleRouter);
         Case(kUriActiveSet, MeshCoP::ActiveDatasetManager);
+        Case(kUriActiveReplace, MeshCoP::ActiveDatasetManager);
         Case(kUriPendingSet, MeshCoP::PendingDatasetManager);
         Case(kUriLeaderPetition, MeshCoP::Leader);
         Case(kUriLeaderKeepAlive, MeshCoP::Leader);
@@ -208,9 +208,9 @@ bool Agent::IsTmfMessage(const Ip6::Address &aSourceAddress, const Ip6::Address 
 
     VerifyOrExit(aDestPort == kUdpPort);
 
-    if (aSourceAddress.IsLinkLocal())
+    if (aSourceAddress.IsLinkLocalUnicast())
     {
-        isTmf = aDestAddress.IsLinkLocal() || aDestAddress.IsLinkLocalMulticast();
+        isTmf = aDestAddress.IsLinkLocalUnicastOrMulticast();
         ExitNow();
     }
 
@@ -311,11 +311,8 @@ bool SecureAgent::HandleResource(const char *aUriPath, Message &aMessage, const 
         Case(kUriCommissionerKeepAlive, MeshCoP::BorderAgent);
         Case(kUriRelayTx, MeshCoP::BorderAgent);
         Case(kUriCommissionerGet, MeshCoP::BorderAgent);
-        Case(kUriCommissionerSet, MeshCoP::BorderAgent);
         Case(kUriActiveGet, MeshCoP::BorderAgent);
-        Case(kUriActiveSet, MeshCoP::BorderAgent);
         Case(kUriPendingGet, MeshCoP::BorderAgent);
-        Case(kUriPendingSet, MeshCoP::BorderAgent);
         Case(kUriProxyTx, MeshCoP::BorderAgent);
 #endif
 

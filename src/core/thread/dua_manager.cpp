@@ -158,7 +158,7 @@ Error DuaManager::GenerateDomainUnicastAddressIid(void)
     }
     else
     {
-        LogWarn("Generate DUA: %s", ErrorToString(error));
+        LogWarnOnError(error, "generate DUA");
     }
 
     return error;
@@ -445,7 +445,11 @@ void DuaManager::PerformNextRegistration(void)
     // Only send DUA.req when necessary
 #if OPENTHREAD_CONFIG_DUA_ENABLE
 #if OPENTHREAD_FTD
-    VerifyOrExit(mle.IsRouterOrLeader() || !mle.IsExpectedToBecomeRouterSoon(), error = kErrorInvalidState);
+    if (!mle.IsRouterOrLeader() && mle.IsExpectedToBecomeRouterSoon())
+    {
+        UpdateRegistrationDelay(mle.GetRouterRoleTransitionTimeout() + kNewRouterRegistrationDelay + 1);
+        ExitNow(error = kErrorInvalidState);
+    }
 #endif
     VerifyOrExit(mle.IsFullThreadDevice() || mle.GetParent().IsThreadVersion1p1(), error = kErrorInvalidState);
 #endif // OPENTHREAD_CONFIG_DUA_ENABLE
@@ -472,7 +476,7 @@ void DuaManager::PerformNextRegistration(void)
     {
         dua = GetDomainUnicastAddress();
         SuccessOrExit(error = Tlv::Append<ThreadTargetTlv>(*message, dua));
-        SuccessOrExit(error = Tlv::Append<ThreadMeshLocalEidTlv>(*message, mle.GetMeshLocal64().GetIid()));
+        SuccessOrExit(error = Tlv::Append<ThreadMeshLocalEidTlv>(*message, mle.GetMeshLocalEid().GetIid()));
         mDuaState             = kRegistering;
         mLastRegistrationTime = TimerMilli::GetNow();
     }
@@ -480,9 +484,8 @@ void DuaManager::PerformNextRegistration(void)
 #endif // OPENTHREAD_CONFIG_DUA_ENABLE
     {
 #if OPENTHREAD_FTD && OPENTHREAD_CONFIG_TMF_PROXY_DUA_ENABLE
-        uint32_t            lastTransactionTime;
-        const Ip6::Address *duaPtr = nullptr;
-        Child              *child  = nullptr;
+        uint32_t lastTransactionTime;
+        Child   *child = nullptr;
 
         OT_ASSERT(mChildIndexDuaRegistering == Mle::kMaxChildren);
 
@@ -497,12 +500,9 @@ void DuaManager::PerformNextRegistration(void)
             }
         }
 
-        child  = Get<ChildTable>().GetChildAtIndex(mChildIndexDuaRegistering);
-        duaPtr = child->GetDomainUnicastAddress();
+        child = Get<ChildTable>().GetChildAtIndex(mChildIndexDuaRegistering);
+        SuccessOrAssert(child->GetDomainUnicastAddress(dua));
 
-        OT_ASSERT(duaPtr != nullptr);
-
-        dua = *duaPtr;
         SuccessOrExit(error = Tlv::Append<ThreadTargetTlv>(*message, dua));
         SuccessOrExit(error = Tlv::Append<ThreadMeshLocalEidTlv>(*message, child->GetMeshLocalIid()));
 
@@ -516,7 +516,7 @@ void DuaManager::PerformNextRegistration(void)
         uint8_t pbbrServiceId;
 
         SuccessOrExit(error = Get<BackboneRouter::Leader>().GetServiceId(pbbrServiceId));
-        SuccessOrExit(error = mle.GetServiceAloc(pbbrServiceId, messageInfo.GetPeerAddr()));
+        mle.GetServiceAloc(pbbrServiceId, messageInfo.GetPeerAddr());
     }
     else
     {
@@ -548,7 +548,7 @@ exit:
         UpdateCheckDelay(kNoBufDelay);
     }
 
-    LogInfo("PerformNextRegistration: %s", ErrorToString(error));
+    LogWarnOnError(error, "perform next registration");
     FreeMessageOnError(message, error);
 }
 

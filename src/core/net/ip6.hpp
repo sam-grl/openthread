@@ -327,13 +327,8 @@ public:
     static const char *EcnToString(Ecn aEcn);
 
 #if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
-    /**
-     * Returns a reference to the Border Routing counters.
-     *
-     * @returns A reference to the Border Routing counters.
-     *
-     */
-    const otBorderRoutingCounters &GetBorderRoutingCounters(void) const { return mBorderRoutingCounters; }
+
+    typedef otBorderRoutingCounters BrCounters; ///< Border Routing counters.
 
     /**
      * Returns a reference to the Border Routing counters.
@@ -341,13 +336,42 @@ public:
      * @returns A reference to the Border Routing counters.
      *
      */
-    otBorderRoutingCounters &GetBorderRoutingCounters(void) { return mBorderRoutingCounters; }
+    const BrCounters &GetBorderRoutingCounters(void) const { return mBrCounters; }
+
+    /**
+     * Returns a reference to the Border Routing counters.
+     *
+     * @returns A reference to the Border Routing counters.
+     *
+     */
+    BrCounters &GetBorderRoutingCounters(void) { return mBrCounters; }
 
     /**
      * Resets the Border Routing counters.
      *
      */
-    void ResetBorderRoutingCounters(void) { ClearAllBytes(mBorderRoutingCounters); }
+    void ResetBorderRoutingCounters(void) { ClearAllBytes(mBrCounters); }
+
+#endif // OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
+
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+
+    /**
+     * Enables or disables the filter that drops TMF UDP messages from untrusted origin.
+     *
+     * @param[in]  aEnabled  TRUE to enable filter, FALSE otherwise.
+     *
+     */
+    void SetTmfOriginFilterEnabled(bool aEnabled) { mTmfOriginFilterEnabled = aEnabled; }
+
+    /**
+     * Indicates whether the filter that drops TMF UDP messages from untrusted origin is enabled or not.
+     *
+     * @returns TRUE if the filter is enabled, FALSE otherwise.
+     *
+     */
+    bool IsTmfOriginFilterEnabled(void) { return mTmfOriginFilterEnabled; }
+
 #endif
 
 private:
@@ -364,14 +388,12 @@ private:
     void  EnqueueDatagram(Message &aMessage);
     void  HandleSendQueue(void);
     Error PassToHost(OwnedPtr<Message> &aMessagePtr,
-                     const MessageInfo &aMessageInfo,
+                     const Header      &aHeader,
                      uint8_t            aIpProto,
-                     bool               aApplyFilter,
                      bool               aReceive,
                      Message::Ownership aMessageOwnership);
     Error HandleExtensionHeaders(OwnedPtr<Message> &aMessagePtr,
-                                 MessageInfo       &aMessageInfo,
-                                 Header            &aHeader,
+                                 const Header      &aHeader,
                                  uint8_t           &aNextHeader,
                                  bool              &aReceive);
     Error FragmentDatagram(Message &aMessage, uint8_t aIpProto);
@@ -382,16 +404,16 @@ private:
     void UpdateReassemblyList(void);
     void SendIcmpError(Message &aMessage, Icmp::Header::Type aIcmpType, Icmp::Header::Code aIcmpCode);
 #endif
+    Error ReadHopByHopHeader(const Message &aMessage, OffsetRange &aOffsetRange, HopByHopHeader &aHbhHeader) const;
     Error AddMplOption(Message &aMessage, Header &aHeader);
     Error PrepareMulticastToLargerThanRealmLocal(Message &aMessage, const Header &aHeader);
     Error InsertMplOption(Message &aMessage, Header &aHeader);
     Error RemoveMplOption(Message &aMessage);
-    Error HandleOptions(Message &aMessage, Header &aHeader, bool &aReceive);
-    Error HandlePayload(Header            &aIp6Header,
-                        OwnedPtr<Message> &aMessagePtr,
-                        MessageInfo       &aMessageInfo,
-                        uint8_t            aIpProto,
-                        Message::Ownership aMessageOwnership);
+    Error HandleOptions(Message &aMessage, const Header &aHeader, bool &aReceive);
+    Error Receive(Header            &aIp6Header,
+                  OwnedPtr<Message> &aMessagePtr,
+                  uint8_t            aIpProto,
+                  Message::Ownership aMessageOwnership);
     bool  IsOnLink(const Address &aAddress) const;
     Error RouteLookup(const Address &aSource, const Address &aDestination) const;
 #if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
@@ -401,6 +423,10 @@ private:
     using SendQueueTask = TaskletIn<Ip6, &Ip6::HandleSendQueue>;
 
     bool mIsReceiveIp6FilterEnabled;
+
+#if OPENTHREAD_CONFIG_REFERENCE_DEVICE_ENABLE
+    bool mTmfOriginFilterEnabled : 1;
+#endif
 
     Callback<otIp6ReceiveCallback> mReceiveIp6DatagramCallback;
 
@@ -424,7 +450,7 @@ private:
 #endif
 
 #if OPENTHREAD_CONFIG_IP6_BR_COUNTERS_ENABLE
-    otBorderRoutingCounters mBorderRoutingCounters;
+    BrCounters mBrCounters;
 #endif
 };
 

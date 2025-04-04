@@ -168,19 +168,17 @@ public:
      * @param[in]  aStableVersion  The Stable Version value.
      * @param[in]  aType           The Network Data type to set, the full set or stable subset.
      * @param[in]  aMessage        A reference to the message.
-     * @param[in]  aOffset         The offset in @p aMessage pointing to start of Network Data.
-     * @param[in]  aLength         The length of Network Data.
+     * @param[in]  aOffsetRange    The offset range in @p aMessage to read from.
      *
      * @retval kErrorNone   Successfully set the network data.
      * @retval kErrorParse  Network Data in @p aMessage is not valid.
      *
      */
-    Error SetNetworkData(uint8_t        aVersion,
-                         uint8_t        aStableVersion,
-                         Type           aType,
-                         const Message &aMessage,
-                         uint16_t       aOffset,
-                         uint16_t       aLength);
+    Error SetNetworkData(uint8_t            aVersion,
+                         uint8_t            aStableVersion,
+                         Type               aType,
+                         const Message     &aMessage,
+                         const OffsetRange &aOffsetRange);
 
     /**
      * Gets the Commissioning Dataset from Network Data.
@@ -189,6 +187,16 @@ public:
      *
      */
     void GetCommissioningDataset(MeshCoP::CommissioningDataset &aDataset) const;
+
+    /**
+     * Processes a MGMT_COMMISSIONER_GET request message and prepares the response.
+     *
+     * @param[in] aRequest   The MGMT_COMMISSIONER_GET request message.
+     *
+     * @returns The prepared response, or `nullptr` if fails to parse the request or cannot allocate message.
+     *
+     */
+    Coap::Message *ProcessCommissionerGetRequest(const Coap::Message &aMessage) const;
 
     /**
      * Searches for given sub-TLV in Commissioning Data TLV.
@@ -329,6 +337,17 @@ public:
      */
     Error GetPreferredNat64Prefix(ExternalRouteConfig &aConfig) const;
 
+    /**
+     * Indicates whether or not the given IPv6 address matches any NAT64 prefixes.
+     *
+     * @param[in]  aAddress  An IPv6 address to check.
+     *
+     * @retval TRUE   If @p aAddress matches a NAT64 prefix.
+     * @retval FALSE  If @p aAddress does not match a NAT64 prefix.
+     *
+     */
+    bool IsNat64(const Ip6::Address &aAddress) const;
+
 #if OPENTHREAD_FTD
     /**
      * Defines the match mode constants to compare two RLOC16 values.
@@ -364,6 +383,19 @@ public:
      *
      */
     void IncrementVersionAndStableVersion(void);
+
+    /**
+     * Performs anycast ALOC route lookup using the Network Data.
+     *
+     * @param[in]   aAloc16     The ALOC16 destination to lookup.
+     * @param[out]  aRloc16     A reference to return the RLOC16 for the selected route.
+     *
+     * @retval kErrorNone      Successfully lookup best option for @p aAloc16. @p aRloc16 is updated.
+     * @retval kErrorNoRoute   No valid route was found.
+     * @retval kErrorDrop      The @p aAloc16 is not valid.
+     *
+     */
+    Error AnycastLookup(uint16_t aAloc16, uint16_t &aRloc16) const;
 
     /**
      * Returns CONTEXT_ID_RESUSE_DELAY value.
@@ -412,43 +444,45 @@ public:
      */
     void HandleNetworkDataRestoredAfterReset(void);
 
-    /**
-     * Scans network data for given Service ID and returns pointer to the respective TLV, if present.
-     *
-     * @param aServiceId Service ID to look for.
-     * @return Pointer to the Service TLV for given Service ID, or nullptr if not present.
-     *
-     */
-    const ServiceTlv *FindServiceById(uint8_t aServiceId) const;
+#endif // OPENTHREAD_FTD
 
-#if OPENTHREAD_FTD && OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
+#if OPENTHREAD_CONFIG_BORDER_ROUTING_ENABLE
     /**
-     * Indicates whether a given Prefix can act as a valid OMR prefix and exists in the network data.
+     * Indicates whether Network Data contains a valid OMR prefix.
+     *
+     * If the given @p aPrefix is itself not a valid OMR prefix, this method will return `false`, regardless of
+     * whether the prefix is present in the Network Data.
      *
      * @param[in]  aPrefix   The OMR prefix to check.
      *
-     * @retval TRUE  If @p aPrefix is a valid OMR prefix and Network Data contains @p aPrefix.
-     * @retval FALSE Otherwise.
+     * @retval TRUE   Network Data contains a valid OMR prefix entry matching @p aPrefix.
+     * @retval FALSE  Network Data does not contain a valid OMR prefix entry matching @p aPrefix.
      *
      */
-    bool ContainsOmrPrefix(const Ip6::Prefix &aPrefix);
+    bool ContainsOmrPrefix(const Ip6::Prefix &aPrefix) const;
 #endif
-
-#endif // OPENTHREAD_FTD
 
 private:
     using FilterIndexes = MeshCoP::SteeringData::HashBitIndexes;
 
-    const PrefixTlv *FindNextMatchingPrefixTlv(const Ip6::Address &aAddress, const PrefixTlv *aPrevTlv) const;
+    typedef bool (&EntryChecker)(const BorderRouterEntry &aEntry);
 
-    template <typename EntryType> int CompareRouteEntries(const EntryType &aFirst, const EntryType &aSecond) const;
-    int                               CompareRouteEntries(int8_t   aFirstPreference,
-                                                          uint16_t aFirstRloc,
-                                                          int8_t   aSecondPreference,
-                                                          uint16_t aSecondRloc) const;
+    const PrefixTlv *FindNextMatchingPrefixTlv(const Ip6::Address &aAddress, const PrefixTlv *aPrevTlv) const;
+    const PrefixTlv *FindPrefixTlvForContextId(uint8_t aContextId, const ContextTlv *&aContextTlv) const;
+
+    int CompareRouteEntries(const BorderRouterEntry &aFirst, const BorderRouterEntry &aSecond) const;
+    int CompareRouteEntries(const HasRouteEntry &aFirst, const HasRouteEntry &aSecond) const;
+    int CompareRouteEntries(const ServerTlv &aFirst, const ServerTlv &aSecond) const;
+    int CompareRouteEntries(int8_t   aFirstPreference,
+                            uint16_t aFirstRloc,
+                            int8_t   aSecondPreference,
+                            uint16_t aSecondRloc) const;
+
+    static bool IsEntryDefaultRoute(const BorderRouterEntry &aEntry);
 
     Error ExternalRouteLookup(uint8_t aDomainId, const Ip6::Address &aDestination, uint16_t &aRloc16) const;
     Error DefaultRouteLookup(const PrefixTlv &aPrefix, uint16_t &aRloc16) const;
+    Error LookupRouteIn(const PrefixTlv &aPrefixTlv, EntryChecker aEntryChecker, uint16_t &aRloc16) const;
     Error SteeringDataCheck(const FilterIndexes &aFilterIndexes) const;
     void  GetContextForMeshLocalPrefix(Lowpan::Context &aContext) const;
     Error ReadCommissioningDataUint16SubTlv(MeshCoP::Tlv::Type aType, uint16_t &aValue) const;
@@ -550,6 +584,12 @@ private:
 
     void HandleTimer(void);
 
+    static bool IsEntryForDhcp6Agent(const BorderRouterEntry &aEntry);
+    static bool IsEntryForNdAgent(const BorderRouterEntry &aEntry);
+
+    Error LookupRouteForServiceAloc(uint16_t aAloc16, uint16_t &aRloc16) const;
+    Error LookupRouteForAgentAloc(uint8_t aContextId, EntryChecker aEntryChecker, uint16_t &aRloc16) const;
+
     void RegisterNetworkData(uint16_t aRloc16, const NetworkData &aNetworkData);
 
     Error AddPrefix(const PrefixTlv &aPrefix, ChangedFlags &aChangedFlags);
@@ -558,7 +598,8 @@ private:
     Error AddService(const ServiceTlv &aService, ChangedFlags &aChangedFlags);
     Error AddServer(const ServerTlv &aServer, ServiceTlv &aDstService, ChangedFlags &aChangedFlags);
 
-    Error AllocateServiceId(uint8_t &aServiceId) const;
+    Error             AllocateServiceId(uint8_t &aServiceId) const;
+    const ServiceTlv *FindServiceById(uint8_t aServiceId) const;
 
     void RemoveContext(uint8_t aContextId);
     void RemoveContext(PrefixTlv &aPrefix, uint8_t aContextId);

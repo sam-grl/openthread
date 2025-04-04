@@ -154,6 +154,18 @@ bool StringEndsWith(const char *aString, char aChar);
 bool StringEndsWith(const char *aString, const char *aSubString, StringMatchMode aMode = kStringExactMatch);
 
 /**
+ * Checks whether or not two null-terminated strings match exactly.
+ *
+ * @param[in] aFirstString   A pointer to the first string.
+ * @param[in] aSecondString  A pointer to the second string.
+ *
+ * @retval TRUE   If @p aFirstString matches @p aSecondString.
+ * @retval FALSE  If @p aFirstString does not match @p aSecondString.
+ *
+ */
+bool StringMatch(const char *aFirstString, const char *aSecondString);
+
+/**
  * Checks whether or not two null-terminated strings match.
  *
  * @param[in] aFirstString   A pointer to the first string.
@@ -164,7 +176,7 @@ bool StringEndsWith(const char *aString, const char *aSubString, StringMatchMode
  * @retval FALSE  If @p aFirstString does not match @p aSecondString using match mode @p aMode.
  *
  */
-bool StringMatch(const char *aFirstString, const char *aSecondString, StringMatchMode aMode = kStringExactMatch);
+bool StringMatch(const char *aFirstString, const char *aSecondString, StringMatchMode aMode);
 
 /**
  * Copies a string into a given target buffer with a given size if it fits.
@@ -283,7 +295,64 @@ char ToLowercase(char aChar);
 char ToUppercase(char aChar);
 
 /**
- * Coverts a boolean to "yes" or "no" string.
+ * Checks whether a given character is an uppercase letter ('A'-'Z').
+ *
+ * @param[in] aChar   The character to check.
+ *
+ * @retval TRUE    @p aChar is an uppercase letter.
+ * @retval FALSE   @p aChar is not an uppercase letter.
+ *
+ */
+bool IsUppercase(char aChar);
+
+/**
+ * Checks whether a given character is a lowercase letter ('a'-'z').
+ *
+ * @param[in] aChar   The character to check.
+ *
+ * @retval TRUE    @p aChar is a lowercase letter.
+ * @retval FALSE   @p aChar is not a lowercase letter.
+ *
+ */
+bool IsLowercase(char aChar);
+
+/**
+ * Checks whether a given character is a digit character ('0'-'9').
+ *
+ * @param[in] aChar   The character to check.
+ *
+ * @retval TRUE    @p aChar is a digit character.
+ * @retval FALSE   @p aChar is not a digit character.
+ *
+ */
+bool IsDigit(char aChar);
+
+/**
+ * Parse a given digit character to its numeric value.
+ *
+ * @param[in]  aDigitChar   The digit character to parse.
+ * @param[out] aValue       A reference to return the parsed value on success.
+ *
+ * @retval kErrorNone            Successfully parsed the digit, @p aValue is updated.
+ * @retval kErrorInvalidArgs     @p aDigitChar is not a valid digit character.
+ *
+ */
+Error ParseDigit(char aDigitChar, uint8_t &aValue);
+
+/**
+ * Parse a given hex digit character ('0'-'9', 'A'-'F', or 'a'-'f') to its numeric value.
+ *
+ * @param[in]  aHexChar     The hex digit character to parse.
+ * @param[out] aValue       A reference to return the parsed value on success.
+ *
+ * @retval kErrorNone            Successfully parsed the digit, @p aValue is updated.
+ * @retval kErrorInvalidArgs     @p aHexChar is not a valid hex digit character.
+ *
+ */
+Error ParseHexDigit(char aHexChar, uint8_t &aValue);
+
+/**
+ * Converts a boolean to "yes" or "no" string.
  *
  * @param[in] aBool  A boolean value to convert.
  *

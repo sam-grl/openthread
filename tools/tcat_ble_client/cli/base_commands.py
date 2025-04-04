@@ -26,8 +26,9 @@
   POSSIBILITY OF SUCH DAMAGE.
 """
 
+from abc import abstractmethod
 from ble.ble_connection_constants import BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, \
-    BBTC_RX_CHAR_UUID, SERVER_COMMON_NAME
+    BBTC_RX_CHAR_UUID
 from ble.ble_stream import BleStream
 from ble.ble_stream_secure import BleStreamSecure
 from ble import ble_scanner
@@ -37,6 +38,8 @@ from cli.command import Command, CommandResultNone, CommandResultTLV
 from dataset.dataset import ThreadDataset
 from utils import select_device_by_user_input
 from os import path
+from time import time
+from secrets import token_bytes
 
 
 class HelpCommand(Command):
@@ -52,72 +55,167 @@ class HelpCommand(Command):
         return CommandResultNone()
 
 
-class HelloCommand(Command):
+class BleCommand(Command):
+
+    @abstractmethod
+    def get_log_string(self) -> str:
+        pass
+
+    @abstractmethod
+    def prepare_data(self, context):
+        pass
+
+    async def execute_default(self, args, context):
+        bless: BleStreamSecure = context['ble_sstream']
+
+        print(self.get_log_string())
+        data = self.prepare_data(context)
+        response = await bless.send_with_resp(data)
+        if not response:
+            return
+        tlv_response = TLV.from_bytes(response)
+        return CommandResultTLV(tlv_response)
+
+
+class HelloCommand(BleCommand):
+
+    def get_log_string(self) -> str:
+        return 'Sending hello world...'
 
     def get_help_string(self) -> str:
         return 'Send round trip "Hello world!" message.'
 
-    async def execute_default(self, args, context):
-        bless: BleStreamSecure = context['ble_sstream']
-        print('Sending hello world...')
-        data = TLV(TcatTLVType.APPLICATION.value, bytes('Hello world!', 'ascii')).to_bytes()
-        response = await bless.send_with_resp(data)
-        if not response:
-            return
-        tlv_response = TLV.from_bytes(response)
-        return CommandResultTLV(tlv_response)
+    def prepare_data(self, context):
+        return TLV(TcatTLVType.APPLICATION.value, bytes('Hello world!', 'ascii')).to_bytes()
 
 
-class CommissionCommand(Command):
+class CommissionCommand(BleCommand):
+
+    def get_log_string(self) -> str:
+        return 'Commissioning...'
 
     def get_help_string(self) -> str:
         return 'Update the connected device with current dataset.'
 
+    def prepare_data(self, context):
+        dataset: ThreadDataset = context['dataset']
+        dataset_bytes = dataset.to_bytes()
+        return TLV(TcatTLVType.ACTIVE_DATASET.value, dataset_bytes).to_bytes()
+
+
+class DecommissionCommand(BleCommand):
+
+    def get_log_string(self) -> str:
+        return 'Disabling Thread and decommissioning device...'
+
+    def get_help_string(self) -> str:
+        return 'Stop Thread interface and decommission device from current network.'
+
+    def prepare_data(self, context):
+        return TLV(TcatTLVType.DECOMMISSION.value, bytes()).to_bytes()
+
+
+class GetDeviceIdCommand(BleCommand):
+
+    def get_log_string(self) -> str:
+        return 'Retrieving device id.'
+
+    def get_help_string(self) -> str:
+        return 'Get unique identifier for the TCAT device.'
+
+    def prepare_data(self, context):
+        return TLV(TcatTLVType.GET_DEVICE_ID.value, bytes()).to_bytes()
+
+
+class GetExtPanIDCommand(BleCommand):
+
+    def get_log_string(self) -> str:
+        return 'Retrieving extended PAN ID.'
+
+    def get_help_string(self) -> str:
+        return 'Get extended PAN ID that is commissioned in the active dataset.'
+
+    def prepare_data(self, context):
+        return TLV(TcatTLVType.GET_EXT_PAN_ID.value, bytes()).to_bytes()
+
+
+class GetProvisioningUrlCommand(BleCommand):
+
+    def get_log_string(self) -> str:
+        return 'Retrieving provisioning url.'
+
+    def get_help_string(self) -> str:
+        return 'Get a URL for an application suited to commission the TCAT device.'
+
+    def prepare_data(self, context):
+        return TLV(TcatTLVType.GET_PROVISIONING_URL.value, bytes()).to_bytes()
+
+
+class GetNetworkNameCommand(BleCommand):
+
+    def get_log_string(self) -> str:
+        return 'Retrieving network name.'
+
+    def get_help_string(self) -> str:
+        return 'Get the Thread network name that is commissioned in the active dataset.'
+
+    def prepare_data(self, context):
+        return TLV(TcatTLVType.GET_NETWORK_NAME.value, bytes()).to_bytes()
+
+
+class PingCommand(Command):
+
+    def get_help_string(self) -> str:
+        return 'Send echo request to TCAT device.'
+
     async def execute_default(self, args, context):
         bless: BleStreamSecure = context['ble_sstream']
-        dataset: ThreadDataset = context['dataset']
-
-        print('Commissioning...')
-        dataset_bytes = dataset.to_bytes()
-        data = TLV(TcatTLVType.ACTIVE_DATASET.value, dataset_bytes).to_bytes()
+        payload_size = 10
+        max_payload = 512
+        if len(args) > 0:
+            payload_size = int(args[0])
+            if payload_size > max_payload:
+                print(f'Payload size too large. Maximum supported value is {max_payload}')
+                return
+        to_send = token_bytes(payload_size)
+        data = TLV(TcatTLVType.PING.value, to_send).to_bytes()
+        elapsed_time = time()
         response = await bless.send_with_resp(data)
+        elapsed_time = 1e3 * (time() - elapsed_time)
         if not response:
             return
+
         tlv_response = TLV.from_bytes(response)
+        if tlv_response.value != to_send:
+            print("Received malformed response.")
+
+        print(f"Roundtrip time: {elapsed_time} ms")
+
         return CommandResultTLV(tlv_response)
 
 
-class ThreadStartCommand(Command):
+class ThreadStartCommand(BleCommand):
+
+    def get_log_string(self) -> str:
+        return 'Enabling Thread...'
 
     def get_help_string(self) -> str:
         return 'Enable thread interface.'
 
-    async def execute_default(self, args, context):
-        bless: BleStreamSecure = context['ble_sstream']
-
-        print('Enabling Thread...')
-        data = TLV(TcatTLVType.THREAD_START.value, bytes()).to_bytes()
-        response = await bless.send_with_resp(data)
-        if not response:
-            return
-        tlv_response = TLV.from_bytes(response)
-        return CommandResultTLV(tlv_response)
+    def prepare_data(self, context):
+        return TLV(TcatTLVType.THREAD_START.value, bytes()).to_bytes()
 
 
-class ThreadStopCommand(Command):
+class ThreadStopCommand(BleCommand):
+
+    def get_log_string(self) -> str:
+        return 'Disabling Thread...'
 
     def get_help_string(self) -> str:
         return 'Disable thread interface.'
 
-    async def execute_default(self, args, context):
-        bless: BleStreamSecure = context['ble_sstream']
-        print('Disabling Thread...')
-        data = TLV(TcatTLVType.THREAD_STOP.value, bytes()).to_bytes()
-        response = await bless.send_with_resp(data)
-        if not response:
-            return
-        tlv_response = TLV.from_bytes(response)
-        return CommandResultTLV(tlv_response)
+    def prepare_data(self, context):
+        return TLV(TcatTLVType.THREAD_STOP.value, bytes()).to_bytes()
 
 
 class ThreadStateCommand(Command):
@@ -153,13 +251,16 @@ class ScanCommand(Command):
         print(f'Connecting to {device}')
         ble_stream = await BleStream.create(device.address, BBTC_SERVICE_UUID, BBTC_TX_CHAR_UUID, BBTC_RX_CHAR_UUID)
         ble_sstream = BleStreamSecure(ble_stream)
+        cert_path = context['cmd_args'].cert_path if context['cmd_args'] else 'auth'
         ble_sstream.load_cert(
-            certfile=path.join('auth', 'commissioner_cert.pem'),
-            keyfile=path.join('auth', 'commissioner_key.pem'),
-            cafile=path.join('auth', 'ca_cert.pem'),
+            certfile=path.join(cert_path, 'commissioner_cert.pem'),
+            keyfile=path.join(cert_path, 'commissioner_key.pem'),
+            cafile=path.join(cert_path, 'ca_cert.pem'),
         )
-
         print('Setting up secure channel...')
-        await ble_sstream.do_handshake(hostname=SERVER_COMMON_NAME)
-        print('Done')
-        context['ble_sstream'] = ble_sstream
+        if await ble_sstream.do_handshake():
+            print('Done')
+            context['ble_sstream'] = ble_sstream
+        else:
+            print('Secure channel not established.')
+            await ble_stream.disconnect()
