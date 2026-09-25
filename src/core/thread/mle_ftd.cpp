@@ -1939,7 +1939,7 @@ Error Mle::ProcessAddressRegistrationTlv(RxInfo &aRxInfo, Child &aChild)
             uint8_t         contextId = AddressRegistrationTlv::GetContextId(controlByte);
             Lowpan::Context context;
 
-            IgnoreError(aRxInfo.mMessage.ReadAndAdvance(offsetRange, address.GetIid()));
+            SuccessOrExit(error = aRxInfo.mMessage.ReadAndAdvance(offsetRange, address.GetIid()));
 
             Get<NetworkData::Leader>().FindContextForId(contextId, context);
 
@@ -1956,7 +1956,7 @@ Error Mle::ProcessAddressRegistrationTlv(RxInfo &aRxInfo, Child &aChild)
         {
             // Uncompressed entry contains the full IPv6 address.
 
-            IgnoreError(aRxInfo.mMessage.ReadAndAdvance(offsetRange, address));
+            SuccessOrExit(error = aRxInfo.mMessage.ReadAndAdvance(offsetRange, address));
         }
 
         error = aChild.AddIp6Address(address);
@@ -2022,13 +2022,6 @@ exit:
     return error;
 }
 
-bool Mle::IsMessageMleSubType(const Message &aMessage) { return aMessage.IsSubTypeMle(); }
-
-bool Mle::IsMessageChildUpdateRequest(const Message &aMessage)
-{
-    return aMessage.IsMleCommand(kCommandChildUpdateRequest);
-}
-
 void Mle::HandleChildIdRequest(RxInfo &aRxInfo)
 {
     Error              error = kErrorNone;
@@ -2059,7 +2052,7 @@ void Mle::HandleChildIdRequest(RxInfo &aRxInfo)
 
     SuccessOrExit(error = aRxInfo.mMessage.ReadAndMatchResponseTlvWith(child->GetChallenge()));
 
-    Get<MeshForwarder>().RemoveMessagesForChild(*child, IsMessageMleSubType);
+    Get<MeshForwarder>().RemoveMessagesForChild(*child, Message::AcceptAnyMle);
 
     SuccessOrExit(error = aRxInfo.mMessage.ReadFrameCounterTlvs(linkFrameCounter, mleFrameCounter));
 
@@ -2939,10 +2932,11 @@ Error Mle::SendChildUpdateRequestToChild(Child &aChild)
         // to the sleepy child if there is one already
         // queued.
 
-        VerifyOrExit(!Get<IndirectSender>().HasQueuedMessageForSleepyChild(aChild, IsMessageChildUpdateRequest));
+        VerifyOrExit(!Get<IndirectSender>().HasQueuedMessageForSleepyChild(
+            aChild, Message::AcceptMle<kCommandChildUpdateRequest>));
     }
 
-    Get<MeshForwarder>().RemoveMessagesForChild(aChild, IsMessageChildUpdateRequest);
+    Get<MeshForwarder>().RemoveMessagesForChild(aChild, Message::AcceptMle<kCommandChildUpdateRequest>);
 
     VerifyOrExit((message = NewMleMessage(kCommandChildUpdateRequest)) != nullptr, error = kErrorNoBufs);
     SuccessOrExit(error = message->AppendSourceAddressAndLeaderDataTlvs());
