@@ -137,8 +137,7 @@ void MeshForwarder::HandleResolved(const Ip6::Address &aEid, Error aError)
         if (aError != kErrorNone)
         {
             LogMessage(kMessageDrop, message, kErrorAddressQuery);
-            FinalizeMessageDirectTx(message, kErrorAddressQuery);
-            RemoveMessageIfNoPendingTx(message);
+            FinalizeDirectTxAndRemoveMessageIfNoPendingTx(message, kErrorAddressQuery);
             continue;
         }
 
@@ -152,12 +151,12 @@ void MeshForwarder::HandleResolved(const Ip6::Address &aEid, Error aError)
     }
 }
 
-Error MeshForwarder::EvictMessage(Message::Priority aPriority, EvictReason aEvictReason)
+Error MeshForwarder::EvictMessage(Message::Priority aPriority)
 {
     Error    error = kErrorNotFound;
     Message *evict;
 
-    error = RemoveUnsecureReassemblyMessage(aEvictReason);
+    error = RemoveUnsecureReassemblyMessage();
     VerifyOrExit(error == kErrorNotFound);
 
 #if OPENTHREAD_CONFIG_DELAY_AWARE_QUEUE_MANAGEMENT_ENABLE
@@ -165,69 +164,20 @@ Error MeshForwarder::EvictMessage(Message::Priority aPriority, EvictReason aEvic
     VerifyOrExit(error == kErrorNotFound);
 #endif
 
-    evict = FindMessageToEvict(kLowerPriorityThan, aPriority,
-                               (aEvictReason == kEvictReasonDirectTxQueueAtLimit) ? Message::AcceptDirectTx
-                                                                                  : Message::AcceptAny);
+    evict = FindMessageToEvict(kLowerPriorityThan, aPriority, Message::AcceptAny);
 
-    if ((evict == nullptr) && (aEvictReason == kEvictReasonNoMessageBuffer))
+    if (evict == nullptr)
     {
         evict = FindMessageToEvict(kEqualOrHigherPriorityThan, aPriority, Message::AcceptIndirectTx);
     }
 
     VerifyOrExit(evict != nullptr);
+
+    FinalizeAndRemoveMessage(*evict, kErrorNoBufs, kMessageEvict);
     error = kErrorNone;
-
-    switch (aEvictReason)
-    {
-    case kEvictReasonDirectTxQueueAtLimit:
-        FinalizeAndRemoveMessage(*evict, kErrorDrop, kMessageFullQueueEvict);
-        break;
-
-    case kEvictReasonNoMessageBuffer:
-        FinalizeAndRemoveMessage(*evict, kErrorNoBufs, kMessageEvict);
-        break;
-    }
 
 exit:
     return error;
-}
-
-Message *MeshForwarder::FindMessageToEvict(PriorityGuard aGuard, Message::Priority aPriority, Message::Checker aChecker)
-{
-    Message *evict            = nullptr;
-    uint8_t  startPriority    = Message::kPriorityLow;
-    uint8_t  afterEndPriority = Message::kNumPriorities;
-
-    switch (aGuard)
-    {
-    case kLowerPriorityThan:
-        afterEndPriority = aPriority;
-        break;
-    case kEqualOrHigherPriorityThan:
-        startPriority = aPriority;
-        break;
-    }
-
-    for (uint8_t priority = startPriority; priority < afterEndPriority; priority++)
-    {
-        for (Message *message            = mSendQueue.GetHeadForPriority(static_cast<Message::Priority>(priority));
-             message != nullptr; message = message->GetNext())
-        {
-            if (message->GetPriority() != priority)
-            {
-                break;
-            }
-
-            if (!message->GetDoNotEvict() && aChecker(*message))
-            {
-                evict = message;
-                ExitNow();
-            }
-        }
-    }
-
-exit:
-    return evict;
 }
 
 void MeshForwarder::RemoveMessagesForChild(Child &aChild, Message::Checker aChecker)
@@ -239,32 +189,38 @@ void MeshForwarder::RemoveMessagesForChild(Child &aChild, Message::Checker aChec
             continue;
         }
 
-        if (mIndirectSender.RemoveMessageFromSleepyChild(message, aChild) != kErrorNone)
+        if (mIndirectSender.RemoveMessageFromSleepyChild(message, aChild) == kErrorNone)
         {
-            const Neighbor *neighbor = nullptr;
+            RemoveMessageIfNoPendingTx(message);
+            continue;
+        }
+
+        if (message.IsDirectTransmission())
+        {
+            bool matches = false;
 
             if (message.GetType() == Message::kTypeIp6)
             {
                 Ip6::Header ip6header;
 
                 IgnoreError(message.Read(0, ip6header));
-                neighbor = Get<NeighborTable>().FindNeighbor(ip6header.GetDestination());
+
+                matches = (&aChild == Get<NeighborTable>().FindNeighbor(ip6header.GetDestination(),
+                                                                        Neighbor::kInStateAnyExceptInvalid));
             }
             else if (message.GetType() == Message::kType6lowpan)
             {
                 Lowpan::MeshHeader meshHeader;
 
                 IgnoreError(meshHeader.ParseFrom(message));
-                neighbor = Get<NeighborTable>().FindNeighbor(meshHeader.GetDestination());
+                matches = (meshHeader.GetDestination() == aChild.GetRloc16());
             }
 
-            if (&aChild == neighbor)
+            if (matches)
             {
-                message.ClearDirectTransmission();
+                FinalizeDirectTxAndRemoveMessageIfNoPendingTx(message, kErrorDrop);
             }
         }
-
-        RemoveMessageIfNoPendingTx(message);
     }
 }
 
